@@ -1,0 +1,2049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ledger — Stock &amp; Profit Manager</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#0a0e12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<style>
+  :root{
+    --ink:#0a0e12;
+    --ink-2:#0f1620;
+    --panel: rgba(255,255,255,0.055);
+    --panel-brd: rgba(255,255,255,0.10);
+    --panel-brd-hi: rgba(255,255,255,0.22);
+    --emerald:#22c58b;
+    --emerald-dim:#1a8f66;
+    --gold:#e8b54e;
+    --rose:#e2665f;
+    --text:#eaf1ee;
+    --muted:#8fa39b;
+    --muted-2:#5f746c;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  html[data-theme="light"]{
+    --ink:#eef3f0;
+    --ink-2:#e3ece6;
+    --panel: rgba(10,20,15,0.045);
+    --panel-brd: rgba(10,20,15,0.12);
+    --panel-brd-hi: rgba(10,20,15,0.24);
+    --emerald:#178f63;
+    --emerald-dim:#0f7350;
+    --gold:#a97a12;
+    --rose:#c8433c;
+    --text:#101915;
+    --muted:#4d5f57;
+    --muted-2:#7a8c84;
+  }
+  html[data-theme="light"] body{
+    background:
+      radial-gradient(1200px 700px at 15% -10%, rgba(23,143,99,0.07), transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, rgba(169,122,18,0.06), transparent 55%),
+      linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
+  }
+  html[data-theme="light"] #dock{ background: rgba(255,255,255,0.6); }
+  html[data-theme="light"] #scan-modal{ background: rgba(238,243,240,0.95); }
+  html[data-theme="light"] #install-help-modal{ background: rgba(238,243,240,0.92); }
+  #install-help-steps li::marker{ color:var(--emerald); font-weight:700; }
+  #install-help-steps .icon{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; background:rgba(34,197,139,0.14); border:1px solid rgba(34,197,139,0.3); font-size:13px; margin-right:4px; }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 15% -10%, rgba(34,197,139,0.10), transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, rgba(232,181,78,0.08), transparent 55%),
+      linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(34,197,139,0.3);}
+
+  /* ---------- App shell ---------- */
+  /* #app is fixed+clipped so its internal overflow never clips the
+     dock, which is a separate fixed sibling of #app on <body>. */
+  #app{position:fixed; inset:0; overflow:hidden;}
+
+  .stage{
+    position:absolute; inset:0;
+    display:flex;
+    width:800vw; /* 8 pages */
+    height:100vh; height:100dvh;
+    transition: transform 0.62s cubic-bezier(.22,.9,.24,1);
+    will-change:transform;
+  }
+  .page{
+    position:relative;
+    width:100vw; height:100vh; height:100dvh;
+    flex-shrink:0;
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding: 48px 6vw calc(160px + env(safe-area-inset-bottom));
+  }
+  .page::-webkit-scrollbar{width:8px;}
+  .page::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12); border-radius:8px;}
+
+  /* reveal children of active page */
+  .reveal{
+    opacity:0;
+    transform: translateX(46px);
+    transition: opacity .7s cubic-bezier(.22,.9,.24,1), transform .7s cubic-bezier(.22,.9,.24,1);
+  }
+  .page.active .reveal{ opacity:1; transform:translateX(0); }
+  .page.active .reveal:nth-child(1){transition-delay:.04s;}
+  .page.active .reveal:nth-child(2){transition-delay:.10s;}
+  .page.active .reveal:nth-child(3){transition-delay:.16s;}
+  .page.active .reveal:nth-child(4){transition-delay:.22s;}
+  .page.active .reveal:nth-child(5){transition-delay:.28s;}
+  .page.active .reveal:nth-child(6){transition-delay:.34s;}
+  .page.active .reveal:nth-child(n+7){transition-delay:.40s;}
+
+  h1.page-title{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size: clamp(28px, 4vw, 44px);
+    letter-spacing:-0.01em;
+    margin: 4px 0 6px;
+  }
+  .page-eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--emerald);
+    margin-bottom:10px;
+    display:block;
+  }
+  .page-sub{ color:var(--muted); font-size:14.5px; margin-bottom:28px; max-width:640px; line-height:1.55;}
+
+  /* ---------- Glass panel / card ---------- */
+  .glass{
+    background:var(--panel);
+    border:1px solid var(--panel-brd);
+    border-radius:20px;
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 20px 40px -20px rgba(0,0,0,0.6);
+  }
+  .grid{ display:grid; gap:18px; }
+  .grid.cols-4{ grid-template-columns:repeat(4,1fr); }
+  .grid.cols-3{ grid-template-columns:repeat(3,1fr); }
+  .grid.cols-2{ grid-template-columns:repeat(2,1fr); }
+  @media (max-width:1000px){
+    .grid.cols-4{grid-template-columns:repeat(2,1fr);}
+    .grid.cols-3{grid-template-columns:repeat(2,1fr);}
+  }
+
+  /* ---------- Stat cards ---------- */
+  .stat{ padding:22px 22px 20px; }
+  .stat .k{ font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .stat .v{ font-family:var(--serif); font-size:30px; margin-top:8px; }
+  .stat .d{ font-size:12px; margin-top:6px; color:var(--muted-2);}
+  .up{ color:var(--emerald);}
+  .down{ color:var(--rose);}
+
+  /* ---------- Liquid glass buttons ---------- */
+  .lg-btn{
+    position:relative;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:12px 22px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.16);
+    background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.03));
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:.01em;
+    cursor:pointer;
+    overflow:hidden;
+    transition: transform .28s cubic-bezier(.22,.9,.24,1), box-shadow .28s ease, border-color .28s ease, background .28s ease;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 8px 18px -10px rgba(0,0,0,0.55);
+  }
+  .lg-btn::before{
+    content:"";
+    position:absolute; inset:0;
+    background: radial-gradient(120px 60px at var(--mx,50%) var(--my,0%), rgba(255,255,255,0.35), transparent 60%);
+    opacity:0;
+    transition: opacity .35s ease;
+    pointer-events:none;
+  }
+  .lg-btn:hover{
+    transform: translateY(-2px) scale(1.015);
+    border-color: rgba(255,255,255,0.32);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 14px 28px -12px rgba(0,0,0,0.65), 0 0 0 1px rgba(34,197,139,0.15);
+  }
+  .lg-btn:hover::before{ opacity:1; }
+  .lg-btn:active{ transform: translateY(0) scale(0.985); }
+  .lg-btn.primary{
+    background: linear-gradient(180deg, rgba(34,197,139,0.55), rgba(26,143,102,0.35));
+    border-color: rgba(34,197,139,0.55);
+  }
+  .lg-btn.danger{
+    background: linear-gradient(180deg, rgba(226,102,95,0.45), rgba(150,45,40,0.3));
+    border-color: rgba(226,102,95,0.5);
+  }
+  .lg-btn.small{ padding:8px 14px; font-size:12.5px; border-radius:10px;}
+  .lg-btn:disabled{ opacity:.4; cursor:not-allowed; transform:none; }
+
+  /* ---------- Inputs ---------- */
+  label.field{ display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted); }
+  input, select{
+    background:rgba(255,255,255,0.045);
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:10px;
+    padding:10px 12px;
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:14px;
+    outline:none;
+    transition: border-color .2s ease, background .2s ease;
+  }
+  input:focus, select:focus{ border-color:var(--emerald); background:rgba(34,197,139,0.06); }
+  input::placeholder{ color:var(--muted-2); }
+
+  /* ---------- Table ---------- */
+  .table-card{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    position:relative;
+    scrollbar-width:thin;
+  }
+  .table-card::-webkit-scrollbar{ height:6px; }
+  .table-card::-webkit-scrollbar-thumb{ background:rgba(255,255,255,0.14); border-radius:8px; }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; min-width:640px; }
+  thead th{
+    text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); padding:0 14px 10px; font-weight:500; border-bottom:1px solid var(--panel-brd);
+    white-space:nowrap;
+  }
+  tbody td{ padding:13px 14px; border-bottom:1px solid rgba(255,255,255,0.055); vertical-align:middle;}
+  tbody tr:hover{ background:rgba(255,255,255,0.03); }
+  tbody tr:last-child td{ border-bottom:none; }
+  /* First column stays put while the rest scrolls, so you always know which row you're looking at */
+  .table-card thead th:first-child, .table-card tbody td:first-child{
+    position:sticky; left:0; z-index:2;
+    background:var(--ink-2);
+    box-shadow: 2px 0 6px -2px rgba(0,0,0,0.35);
+  }
+  html[data-theme="light"] .table-card thead th:first-child, html[data-theme="light"] .table-card tbody td:first-child{
+    background:#e6ede9;
+  }
+  .pill{ display:inline-block; padding:3px 10px; border-radius:99px; font-size:11px; font-family:var(--mono); }
+  .pill.ok{ background:rgba(34,197,139,0.14); color:var(--emerald); border:1px solid rgba(34,197,139,0.3); }
+  .pill.low{ background:rgba(226,102,95,0.14); color:var(--rose); border:1px solid rgba(226,102,95,0.3); }
+  .pill.mid{ background:rgba(232,181,78,0.14); color:var(--gold); border:1px solid rgba(232,181,78,0.3); }
+  .num{ font-family:var(--mono); }
+  .muted{ color:var(--muted); }
+  .row-actions{ display:flex; gap:6px; flex-wrap:nowrap; }
+  .empty{ padding:40px 20px; text-align:center; color:var(--muted-2); font-size:13px; }
+
+  /* ---------- Bar chart (pure CSS/SVG, offline) ---------- */
+  .chart-wrap{ display:flex; align-items:flex-end; gap:10px; height:180px; padding:10px 4px 0; }
+  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .bar{ width:100%; border-radius:8px 8px 3px 3px; background:linear-gradient(180deg, var(--emerald), var(--emerald-dim)); box-shadow:0 0 0 1px rgba(34,197,139,0.25) inset; transition: height .6s cubic-bezier(.22,.9,.24,1); }
+  .bar.exp{ background:linear-gradient(180deg, var(--rose), #a8433c); box-shadow:0 0 0 1px rgba(226,102,95,0.25) inset;}
+  .bar-label{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+
+  /* ---------- Section headers ---------- */
+  .section-head{ display:flex; align-items:center; justify-content:space-between; margin: 34px 0 14px; }
+  .section-head h3{ font-family:var(--serif); font-size:19px; font-weight:600; margin:0; }
+
+  form.inline-form{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:14px; padding:22px; }
+  form.inline-form .full{ grid-column:1/-1; }
+
+  /* ---------- Apple-style dock ---------- */
+  #dock-wrap{
+    position:fixed; left:0; right:0; bottom:0; z-index:9999;
+    display:flex; justify-content:center;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    pointer-events:none;
+  }
+  #dock{
+    pointer-events:auto;
+    display:flex; align-items:flex-end; gap:6px;
+    padding:10px 14px;
+    border-radius:24px;
+    background: rgba(20,26,24,0.45);
+    border:1px solid rgba(255,255,255,0.14);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 20px 50px -20px rgba(0,0,0,0.7);
+  }
+  .dock-item{
+    position:relative;
+    width:52px; height:52px;
+    border-radius:15px;
+    display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
+    border:1px solid rgba(255,255,255,0.12);
+    cursor:pointer;
+    transition: transform .22s cubic-bezier(.34,1.56,.64,1), width .22s ease, height .22s ease, margin .22s ease, border-color .22s ease, background .22s ease;
+    transform-origin:bottom center;
+  }
+  .dock-icon{
+    width:22px; height:22px;
+    stroke:var(--muted);
+    stroke-width:1.7;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    fill:none;
+    transition: stroke .22s ease;
+  }
+  .dock-item:hover .dock-icon, .dock-item.active .dock-icon{ stroke:var(--text); }
+  .dock-item.active .dock-icon{ stroke:var(--emerald); }
+  .dock-item:hover{
+    transform: translateY(-10px) scale(1.22);
+    border-color: rgba(255,255,255,0.3);
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.05));
+  }
+  .dock-item.active{
+    background: linear-gradient(180deg, rgba(34,197,139,0.45), rgba(26,143,102,0.25));
+    border-color: rgba(34,197,139,0.55);
+  }
+  .dock-item .dot{
+    position:absolute; bottom:-9px; left:50%; transform:translateX(-50%);
+    width:4px; height:4px; border-radius:50%; background:var(--emerald);
+    opacity:0; transition:opacity .2s ease;
+  }
+  .dock-item.active .dot{ opacity:1; }
+  .dock-item .badge{
+    position:absolute; top:-4px; right:-4px;
+    min-width:17px; height:17px; padding:0 4px;
+    border-radius:99px; background:var(--rose); color:#1a0b0a;
+    font-family:var(--mono); font-size:10px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid rgba(0,0,0,0.3);
+  }
+  .dock-tip{
+    position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
+    background:rgba(15,20,18,0.92); border:1px solid rgba(255,255,255,0.14);
+    padding:4px 9px; border-radius:7px; font-size:10px; white-space:nowrap;
+    opacity:0; pointer-events:none; transition:opacity .18s ease; font-family:var(--sans);
+    color:#eaf1ee; /* fixed light text: tooltip bg is always dark, in both themes */
+    max-width:90vw;
+  }
+  .dock-item:hover .dock-tip{ opacity:1; }
+  /* Edge items: keep the tooltip anchored to the icon's own edge instead of centering,
+     so it can't overflow off the left/right of the screen and get clipped. */
+  .dock-item:first-child .dock-tip{ left:0; transform:translateX(0); }
+  .dock-item:last-child .dock-tip{ left:auto; right:0; transform:translateX(0); }
+  .dock-item:nth-child(2) .dock-tip{ left:-8px; transform:translateX(0); }
+  .dock-item:nth-last-child(2) .dock-tip{ left:auto; right:-8px; transform:translateX(0); }
+
+  /* top status bar */
+  #topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 6vw 0;
+    pointer-events:none;
+  }
+  #topbar .brand{ font-family:var(--serif); font-size:17px; letter-spacing:.02em; display:flex; align-items:center; gap:8px; }
+  #topbar .brand .dot2{ width:8px; height:8px; border-radius:50%; background:var(--emerald); box-shadow:0 0 12px var(--emerald); }
+  #topbar .offline-pill{
+    pointer-events:auto;
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    padding:6px 12px; border-radius:99px; background:rgba(34,197,139,0.1);
+    border:1px solid rgba(34,197,139,0.3); color:var(--emerald);
+  }
+
+  /* toast */
+  #toast{
+    position:fixed; top:22px; left:50%; transform:translateX(-50%) translateY(-140%);
+    background:rgba(18,24,22,0.92); border:1px solid rgba(255,255,255,0.16);
+    padding:11px 18px; border-radius:12px; font-size:13px; z-index:100;
+    backdrop-filter:blur(14px);
+    transition: transform .4s cubic-bezier(.22,.9,.24,1);
+    color:#eaf1ee; /* fixed light text: background is always dark, in both themes */
+  }
+  #toast.show{ transform:translateX(-50%) translateY(0); }
+
+  .flex{ display:flex; }
+  .gap8{ gap:8px; } .gap12{ gap:12px; } .gap16{ gap:16px; }
+  .aic{ align-items:center; }
+  .jcb{ justify-content:space-between; }
+  .mt8{margin-top:8px;} .mt16{margin-top:16px;} .mt24{margin-top:24px;}
+
+  @media (max-width:680px){
+    #dock{ gap:3px; padding:8px 10px;}
+    .dock-item{ width:44px; height:44px; border-radius:12px;}
+    .dock-icon{ width:19px; height:19px; }
+    .grid.cols-4, .grid.cols-3, .grid.cols-2{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="lock-screen" style="display:none; position:fixed; inset:0; z-index:500; align-items:center; justify-content:center; padding:24px;
+  background:linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);">
+  <div class="glass" style="max-width:360px; width:100%; padding:34px 28px; text-align:center;">
+    <div style="width:56px; height:56px; margin:0 auto 18px; border-radius:16px; background:rgba(34,197,139,0.14); border:1px solid rgba(34,197,139,0.3); display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg></div>
+    <h2 style="font-family:var(--serif); font-size:22px; margin:0 0 4px; color:var(--text);" id="lock-biz-name">Ledger</h2>
+    <p style="font-size:12.5px; margin:0 0 22px; color:var(--muted);">Enter your PIN to continue</p>
+    <input type="password" id="lock-pin-input" inputmode="numeric" autocomplete="off" placeholder="••••" maxlength="12"
+      style="text-align:center; font-size:22px; letter-spacing:0.3em; width:100%; margin-bottom:14px; color:var(--text); background:rgba(255,255,255,0.045);">
+    <p id="lock-error" style="color:var(--rose); font-size:12px; min-height:16px; margin:0 0 14px;"></p>
+    <button class="lg-btn primary" id="btn-unlock" style="width:100%;">Unlock</button>
+    <p style="font-size:10.5px; margin:18px 0 0; line-height:1.5; color:var(--muted-2);">This is a local screen lock stored only on this device — it keeps casual access out, offline, but isn't full data encryption.</p>
+  </div>
+</div>
+
+<div id="welcome-banner" style="display:none; position:fixed; top:22px; left:50%; transform:translateX(-50%) translateY(-140%); z-index:150;
+  background:rgba(18,24,22,0.92); border:1px solid rgba(34,197,139,0.35); color:#eaf1ee; padding:14px 24px; border-radius:14px;
+  backdrop-filter:blur(14px); transition:transform .5s cubic-bezier(.22,.9,.24,1); text-align:center;">
+  <div style="font-family:var(--serif); font-size:16px;" id="welcome-title">Welcome back</div>
+  <div class="muted" style="font-size:11.5px; margin-top:2px;" id="welcome-sub"></div>
+</div>
+
+<div id="topbar">
+  <div class="flex gap8" style="pointer-events:auto; margin-left:auto;">
+    <button id="btn-lock-now" class="lg-btn small" style="display:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:5px;"><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg>Lock Ledger</button>
+    <button id="btn-install" class="lg-btn small" style="display:none;">⤓ Install app</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="app">
+  <div class="stage" id="stage">
+
+    <!-- PAGE 0: DASHBOARD -->
+    <section class="page active" data-page="0">
+      <span class="page-eyebrow reveal">Overview</span>
+      <h1 class="page-title reveal">Good day. Here's how the business stands.</h1>
+      <p class="page-sub reveal">A running picture of stock value, revenue, expenses and the profit that's actually left over.</p>
+
+      <div class="grid cols-4 reveal" id="dash-stats"></div>
+
+      <div class="section-head reveal"><h3>Revenue vs. expenses — last 6 months</h3></div>
+      <div class="glass reveal" style="padding:20px 22px;">
+        <div class="chart-wrap" id="chart"></div>
+      </div>
+
+      <div class="section-head reveal"><h3>Low stock alerts</h3></div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Item</th><th>On hand</th><th>Reorder level</th><th>Status</th></tr></thead>
+          <tbody id="dash-lowstock"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PAGE 1: INVENTORY -->
+    <section class="page" data-page="1">
+      <span class="page-eyebrow reveal">Stock</span>
+      <h1 class="page-title reveal">Inventory</h1>
+      <p class="page-sub reveal">Every item, its cost, its price, and what's left. Stock updates automatically the moment a sale is recorded.</p>
+
+      <div class="glass reveal">
+        <form class="inline-form" id="inv-form">
+          <label class="field">Item name<input type="text" id="inv-name" placeholder="e.g. Rice 2kg" required></label>
+          <label class="field">Cost price (KES)<input type="number" id="inv-cost" min="0" step="0.01" placeholder="0.00" required></label>
+          <label class="field">Sell price (KES)<input type="number" id="inv-price" min="0" step="0.01" placeholder="0.00" required></label>
+          <label class="field">Quantity<input type="number" id="inv-qty" min="0" step="1" placeholder="0" required></label>
+          <label class="field">Reorder level<input type="number" id="inv-reorder" min="0" step="1" placeholder="5"></label>
+          <label class="field">Date added<input type="date" id="inv-date"></label>
+          <label class="field">Barcode / SKU <span class="muted" style="font-size:10px;">(optional)</span>
+            <span class="flex gap8">
+              <input type="text" id="inv-barcode" placeholder="Scan or type" style="flex:1;">
+              <button class="lg-btn small" type="button" id="btn-inv-scan" title="Scan with camera"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5H8l1.3-1.8h5.4L16 7h2.5A1.5 1.5 0 0 1 20 8.5v8A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-8Z"/><circle cx="12" cy="12.3" r="3.2"/></svg></button>
+            </span>
+          </label>
+          <div class="field" style="justify-content:flex-end;"><button class="lg-btn primary" type="submit">＋ Add item</button></div>
+        </form>
+      </div>
+
+      <div class="section-head reveal"><h3>All items</h3></div>
+      <div class="reveal flex gap12" style="margin-bottom:12px;">
+        <input type="text" id="inv-search" placeholder="Search items…" style="flex:1; max-width:320px;">
+      </div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Item</th><th>Cost</th><th>Price</th><th>Qty</th><th>Stock value</th><th>Barcode</th><th>Status</th><th></th></tr></thead>
+          <tbody id="inv-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PAGE 2: SALES -->
+    <section class="page" data-page="2">
+      <span class="page-eyebrow reveal">Transactions</span>
+      <h1 class="page-title reveal">Quick sale</h1>
+      <p class="page-sub reveal">Scan a barcode, tap a top-seller, or pick an item — build the basket, then check out in one tap. Built for the rush, not just the quiet hours.</p>
+
+      <div class="glass reveal" style="padding:20px 22px;">
+        <div class="flex gap12" style="flex-wrap:wrap; align-items:flex-end;">
+          <label class="field" style="flex:1; min-width:220px;">Scan or type barcode, then press Enter
+            <input type="text" id="barcode-input" placeholder="e.g. 5901234123457" autocomplete="off" inputmode="text">
+          </label>
+          <button class="lg-btn" id="btn-cam-scan" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:5px;"><path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5H8l1.3-1.8h5.4L16 7h2.5A1.5 1.5 0 0 1 20 8.5v8A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-8Z"/><circle cx="12" cy="12.3" r="3.2"/></svg>Scan with camera</button>
+        </div>
+        <p class="muted" style="font-size:11.5px; margin:8px 0 0;">Works with any USB or Bluetooth barcode scanner too — they type into this field automatically, just keep it focused.</p>
+      </div>
+
+      <div class="section-head reveal"><h3>Top sellers — tap to add</h3></div>
+      <div class="grid cols-4 reveal" id="quick-tiles"></div>
+
+      <div class="section-head reveal"><h3>Add manually</h3></div>
+      <div class="glass reveal" style="padding:18px 22px;">
+        <div class="flex gap12" style="flex-wrap:wrap; align-items:flex-end;">
+          <label class="field" style="flex:1; min-width:200px;">Item<select id="sale-item"></select></label>
+          <label class="field">Quantity<input type="number" id="sale-qty" min="1" step="1" value="1"></label>
+          <button class="lg-btn" id="btn-manual-add" type="button">＋ Add to basket</button>
+        </div>
+      </div>
+
+      <div class="section-head reveal"><h3>Basket</h3></div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th><th></th></tr></thead>
+          <tbody id="cart-table"></tbody>
+        </table>
+      </div>
+      <div class="glass reveal flex gap16" style="margin-top:14px; padding:16px 20px; flex-wrap:wrap; align-items:flex-end;">
+        <label class="field">Sale date<input type="date" id="sale-date"></label>
+        <label class="field">Payment
+          <select id="sale-payment"><option value="cash">Cash / paid</option><option value="credit">On credit (unpaid)</option></select>
+        </label>
+        <label class="field" id="sale-debtor-wrap" style="display:none;">Debtor name<input type="text" id="sale-debtor" placeholder="Who owes this?"></label>
+      </div>
+      <div class="reveal flex jcb aic" style="margin-top:16px; flex-wrap:wrap; gap:12px;">
+        <div class="glass stat" style="padding:14px 20px; flex:0 0 auto;">
+          <div class="k">Basket total</div>
+          <div class="v" id="cart-total" style="font-size:24px;">KES 0.00</div>
+        </div>
+        <button class="lg-btn primary" id="btn-complete-sale" style="padding:16px 30px; font-size:15px;">✓ Complete sale</button>
+      </div>
+
+      <div class="section-head reveal"><h3>Recent sales</h3></div>
+      <div class="reveal flex gap12" style="margin-bottom:12px;">
+        <input type="text" id="sales-search" placeholder="Search sales…" style="flex:1; max-width:320px;">
+      </div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Profit</th><th>Payment</th><th></th></tr></thead>
+          <tbody id="sales-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+
+    <!-- PAGE 3: EXPENSES -->
+    <section class="page" data-page="3">
+      <span class="page-eyebrow reveal">Overheads</span>
+      <h1 class="page-title reveal">Expenses</h1>
+      <p class="page-sub reveal">Rent, salaries, electricity, water — recurring or one-off, all counted against profit.</p>
+
+      <div class="glass reveal">
+        <form class="inline-form" id="exp-form">
+          <label class="field">Category
+            <select id="exp-category">
+              <option>Rent</option>
+              <option>Salaries</option>
+              <option>Electricity</option>
+              <option>Water</option>
+              <option>Supplies</option>
+              <option>Transport</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label class="field">Description<input type="text" id="exp-desc" placeholder="e.g. March rent"></label>
+          <label class="field">Amount (KES)<input type="number" id="exp-amount" min="0" step="0.01" placeholder="0.00" required></label>
+          <label class="field">Date<input type="date" id="exp-date"></label>
+          <label class="field">Recurs monthly?
+            <select id="exp-recurring"><option value="no">No</option><option value="yes">Yes</option></select>
+          </label>
+          <div class="field" style="justify-content:flex-end;"><button class="lg-btn primary" type="submit">＋ Add expense</button></div>
+        </form>
+      </div>
+
+      <div class="section-head reveal"><h3>Expense log</h3></div>
+      <div class="reveal flex gap12" style="margin-bottom:12px;">
+        <input type="text" id="exp-search" placeholder="Search expenses…" style="flex:1; max-width:320px;">
+      </div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Recurring</th><th></th></tr></thead>
+          <tbody id="exp-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PAGE 4: REPORTS -->
+    <section class="page" data-page="4">
+      <span class="page-eyebrow reveal">Profit &amp; loss</span>
+      <h1 class="page-title reveal">Reports</h1>
+      <p class="page-sub reveal">The full picture: revenue, cost of goods sold, overheads, and what's actually left.</p>
+
+      <div class="reveal flex gap12" style="margin-bottom:22px; flex-wrap:wrap;">
+        <button class="lg-btn primary" id="btn-print-pdf"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px;"><path d="M7 8.5V4.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v4"/><rect x="4.5" y="8.5" width="15" height="7" rx="1.5"/><path d="M7 14.5h10v5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5Z"/></svg>Print / Save as PDF</button>
+        <button class="lg-btn" id="btn-export-xlsx">⬇ Download Excel (.xlsx)</button>
+      </div>
+
+      <div class="glass reveal" style="padding:28px 30px; max-width:560px;">
+        <table style="font-size:14.5px;">
+          <tbody id="pnl-table"></tbody>
+        </table>
+      </div>
+
+      <div class="section-head reveal"><h3>Expense breakdown</h3></div>
+      <div class="grid cols-4 reveal" id="exp-breakdown"></div>
+    </section>
+
+    <!-- PAGE 5: DEBTS -->
+    <section class="page" data-page="5">
+      <span class="page-eyebrow reveal">Credit &amp; receivables</span>
+      <h1 class="page-title reveal">Debts</h1>
+      <p class="page-sub reveal">Money owed to the business — whether from a credit sale in the basket or logged directly here. Log part-payments as they come in; the outstanding balance updates automatically, and once it's fully cleared the linked sale updates too.</p>
+
+      <div class="grid cols-3 reveal" id="debt-stats"></div>
+
+      <div class="glass reveal">
+        <form class="inline-form" id="debt-form">
+          <label class="field">Debtor name<input type="text" id="debt-name" placeholder="e.g. Jane W." required></label>
+          <label class="field">Phone <span class="muted" style="font-size:10px;">(optional)</span><input type="text" id="debt-phone" placeholder="07…"></label>
+          <label class="field">Amount owed (KES)<input type="number" id="debt-amount" min="0" step="0.01" placeholder="0.00" required></label>
+          <label class="field">Date<input type="date" id="debt-date"></label>
+          <label class="field">Notes <span class="muted" style="font-size:10px;">(optional)</span><input type="text" id="debt-notes" placeholder="e.g. for 2 bags rice"></label>
+          <div class="field" style="justify-content:flex-end;"><button class="lg-btn primary" type="submit">＋ Log debt</button></div>
+        </form>
+      </div>
+
+      <div class="section-head reveal"><h3>Outstanding &amp; settled</h3></div>
+      <div class="reveal flex gap12" style="margin-bottom:12px;">
+        <input type="text" id="debt-search" placeholder="Search debtor…" style="flex:1; max-width:320px;">
+      </div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Date</th><th>Debtor</th><th>Phone</th><th>Original</th><th>Cleared to date</th><th>Outstanding</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+          <tbody id="debt-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PAGE 6: ORDERS -->
+    <section class="page" data-page="6">
+      <span class="page-eyebrow reveal">Prepaid &amp; on order</span>
+      <h1 class="page-title reveal">Items ordered</h1>
+      <p class="page-sub reveal">For orders customers pay for ahead of collection — log the deposit now, top up payments as they come in, and mark it fulfilled once handed over.</p>
+
+      <div class="grid cols-3 reveal" id="order-stats"></div>
+
+      <div class="glass reveal">
+        <form class="inline-form" id="order-form">
+          <label class="field">Customer name<input type="text" id="order-customer" placeholder="e.g. Peter K." required></label>
+          <label class="field">Phone <span class="muted" style="font-size:10px;">(optional)</span><input type="text" id="order-phone" placeholder="07…"></label>
+          <label class="field">Item / description<input type="text" id="order-item" placeholder="e.g. 3x Sofa cushions" required></label>
+          <label class="field">Total price (KES)<input type="number" id="order-total" min="0" step="0.01" placeholder="0.00" required></label>
+          <label class="field">Deposit paid now (KES)<input type="number" id="order-deposit" min="0" step="0.01" placeholder="0.00"></label>
+          <label class="field">Order date<input type="date" id="order-date"></label>
+          <label class="field">Notes <span class="muted" style="font-size:10px;">(optional)</span><input type="text" id="order-notes" placeholder="e.g. ready by Friday"></label>
+          <div class="field" style="justify-content:flex-end;"><button class="lg-btn primary" type="submit">＋ Log order</button></div>
+        </form>
+      </div>
+
+      <div class="section-head reveal"><h3>All orders</h3></div>
+      <div class="reveal flex gap12" style="margin-bottom:12px;">
+        <input type="text" id="order-search" placeholder="Search customer or item…" style="flex:1; max-width:320px;">
+      </div>
+      <div class="glass reveal table-card">
+        <table>
+          <thead><tr><th>Date</th><th>Customer</th><th>Item</th><th>Total</th><th>Paid</th><th>Balance</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+          <tbody id="order-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PAGE 7: SETTINGS -->
+    <section class="page" data-page="7">
+      <span class="page-eyebrow reveal">Data</span>
+      <h1 class="page-title reveal">Settings &amp; backup</h1>
+      <p class="page-sub reveal">Everything lives in this browser's local storage, offline. Export a backup regularly, or restore one on a new device.</p>
+
+      <div class="glass reveal" style="padding:24px; max-width:640px;">
+        <p class="muted" style="font-size:12.5px; margin:0 0 10px;">Appearance</p>
+        <div class="flex gap12" style="flex-wrap:wrap;">
+          <button class="lg-btn" id="btn-theme-dark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px;"><path d="M20 14.2A8.2 8.2 0 1 1 9.8 4a6.5 6.5 0 0 0 10.2 10.2Z"/></svg>Dark</button>
+          <button class="lg-btn" id="btn-theme-light"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:6px;"><circle cx="12" cy="12" r="3.6"/><path d="M12 3.5v2M12 18.5v2M4.5 12h2M17.5 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>Light</button>
+          <button class="lg-btn" id="btn-theme-reset">⟲ Reset to default</button>
+        </div>
+      </div>
+
+      <div class="glass reveal mt16" style="padding:24px; max-width:640px;">
+        <p class="muted" style="font-size:12.5px; margin:0 0 10px;">App lock (offline PIN)</p>
+        <p class="muted" style="font-size:11.5px; margin:0 0 14px; line-height:1.5;" id="pin-status-text">No PIN set — anyone opening the app has access.</p>
+        <div class="flex gap12" style="flex-wrap:wrap; align-items:flex-end;">
+          <label class="field" id="pin-current-wrap" style="flex:1; min-width:160px; display:none;">Current PIN<input type="password" id="pin-current" inputmode="numeric" placeholder="••••"></label>
+          <label class="field" style="flex:1; min-width:160px;">New PIN (4+ digits)<input type="password" id="pin-new" inputmode="numeric" placeholder="••••"></label>
+          <button class="lg-btn primary" id="btn-set-pin">Set / change PIN</button>
+          <button class="lg-btn danger" id="btn-remove-pin" style="display:none;">Remove PIN</button>
+        </div>
+        <p id="pin-error" style="color:var(--rose); font-size:11.5px; margin:10px 0 0; min-height:14px;"></p>
+      </div>
+
+      <div class="glass reveal mt16" style="padding:24px; max-width:640px;">
+        <div class="flex gap12" style="flex-wrap:wrap;">
+          <button class="lg-btn primary" id="btn-export">⬇ Export backup (.json)</button>
+          <label class="lg-btn" for="file-import" style="cursor:pointer;">⬆ Import backup</label>
+          <input type="file" id="file-import" accept="application/json" style="display:none;">
+          <button class="lg-btn danger" id="btn-reset">⟲ Reset all data</button>
+        </div>
+        <p class="muted mt16" style="font-size:12.5px; line-height:1.6;">Business name shown on reports:</p>
+        <div class="flex gap8">
+          <input type="text" id="biz-name" placeholder="Your business name" style="flex:1;">
+          <button class="lg-btn small" id="btn-save-name">Save</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="scan-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(5,8,7,0.92); align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:24px;">
+  <video id="scan-video" playsinline autoplay muted style="width:min(92vw,480px); border-radius:20px; border:1px solid rgba(255,255,255,0.18);"></video>
+  <p class="muted" id="scan-status" style="font-size:13px;">Point the camera at a barcode…</p>
+  <button class="lg-btn danger" id="btn-close-scan" type="button">Close scanner</button>
+</div>
+
+<div id="install-help-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(5,8,7,0.88); align-items:center; justify-content:center; padding:24px;">
+  <div class="glass" style="max-width:420px; width:100%; padding:28px 26px; text-align:left;">
+    <h3 style="font-family:var(--serif); font-size:20px; margin:0 0 6px;" id="install-help-title">Install Ledger</h3>
+    <p class="muted" style="font-size:12.5px; margin:0 0 20px; line-height:1.5;" id="install-help-sub">Safari doesn't allow apps to trigger install directly — a couple of manual taps do it.</p>
+    <ol id="install-help-steps" style="margin:0 0 22px; padding-left:22px; display:flex; flex-direction:column; gap:14px; font-size:14px; line-height:1.5;"></ol>
+    <button class="lg-btn primary" id="btn-close-install-help" style="width:100%;">Got it</button>
+  </div>
+</div>
+
+<div id="dock-wrap">
+  <div id="dock">
+    <div class="dock-item active" data-goto="0"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><path d="M4 12.5L11.3 5.6a1 1 0 0 1 1.4 0L20 12.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.2 10.8V18a1 1 0 0 0 1 1H10a1 1 0 0 0 1-1v-3.4a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1V18a1 1 0 0 0 1 1h2.8a1 1 0 0 0 1-1v-7.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="dot"></span><span class="dock-tip">Dashboard</span></div>
+    <div class="dock-item" data-goto="1"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><path d="M4 8.2 12 4l8 4.2v7.6L12 20l-8-4.2V8.2Z" stroke-linejoin="round"/><path d="M4 8.2 12 12l8-3.8M12 12v8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="dot"></span><span class="badge" id="dock-badge-inv" style="display:none;"></span><span class="dock-tip">Inventory</span></div>
+    <div class="dock-item" data-goto="2"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><path d="M5 3.6h11.5a1 1 0 0 1 1 1V20l-2.4-1.7L12.7 20l-2.4-1.7L7.9 20l-2.4-1.7L3 20V6.6a1 1 0 0 1 1-1Z" stroke-linejoin="round" stroke-linecap="round"/><path d="M8 8.4h6.5M8 11.6h6.5M8 14.8h4" stroke-linecap="round"/></svg><span class="dot"></span><span class="dock-tip">Sales</span></div>
+    <div class="dock-item" data-goto="3"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><rect x="3.3" y="6.8" width="17.4" height="11.4" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M3.3 10.2h1.6M19.1 14.8h1.6" stroke-linecap="round"/></svg><span class="dot"></span><span class="dock-tip">Expenses</span></div>
+    <div class="dock-item" data-goto="4"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><path d="M4.5 19.5V9.7M11.7 19.5V4.5M18.9 19.5v-7" stroke-linecap="round"/><path d="M3 19.5h18" stroke-linecap="round"/></svg><span class="dot"></span><span class="dock-tip">Reports</span></div>
+    <div class="dock-item" data-goto="5"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><rect x="3.2" y="5.6" width="17.6" height="12.8" rx="2"/><path d="M3.2 9.6h17.6" stroke-linecap="round"/><path d="M6.4 14.4h5" stroke-linecap="round"/></svg><span class="dot"></span><span class="badge" id="dock-badge-debt" style="display:none;"></span><span class="dock-tip">Debts</span></div>
+    <div class="dock-item" data-goto="6"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><path d="M12 4.2 19.5 8v8L12 19.8 4.5 16V8L12 4.2Z" stroke-linejoin="round" stroke-linecap="round"/><path d="M12 11.5v6M4.9 8.3 12 11.5l7.1-3.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="8.6" r="1.1"/></svg><span class="dot"></span><span class="badge" id="dock-badge-order" style="display:none;"></span><span class="dock-tip">Orders</span></div>
+    <div class="dock-item" data-goto="7"><svg class="dock-icon" viewBox="0 0 24 24" fill="none"><path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h13M21 17.5h-1" stroke-linecap="round"/><circle cx="14.5" cy="6.5" r="1.9"/><circle cx="7.5" cy="12" r="1.9"/><circle cx="16.5" cy="17.5" r="1.9"/></svg><span class="dot"></span><span class="dock-tip">Settings</span></div>
+  </div>
+</div>
+
+<script src="vendor/exceljs.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  const STORE_KEY = "ledger_app_data_v1";
+  const fmt = n => "KES " + (Number(n)||0).toLocaleString("en-KE",{minimumFractionDigits:2, maximumFractionDigits:2});
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const monthKey = d => d.slice(0,7);
+
+  function loadData(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        if(!parsed.cart) parsed.cart = []; if(!parsed.debts) parsed.debts = []; if(!parsed.security) parsed.security = { pinHash:null }; if(!parsed.orders) parsed.orders = []; parsed.debts.forEach(d=>{ if(!d.payments) d.payments = (d.status==="paid" ? [{id:"legacy",date:d.date,amount:d.amount}] : []); });
+        return parsed;
+      }
+    }catch(e){ console.warn("corrupt store, resetting", e); }
+    return { inventory:[], sales:[], expenses:[], cart:[], debts:[], orders:[], bizName:"", theme:"dark", security:{ pinHash:null } };
+  }
+  let data = loadData();
+  function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+  function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>t.classList.remove("show"), 2200);
+  }
+  let uidCounter = Date.now();
+  const uid = () => (uidCounter++).toString(36);
+
+  /* ---------------- Navigation / dock ---------------- */
+  const PAGE_COUNT = 8;
+  let current = 0;
+  const stage = document.getElementById("stage");
+  const pages = Array.from(document.querySelectorAll(".page"));
+  const dockItems = Array.from(document.querySelectorAll(".dock-item"));
+
+  function goto(idx){
+    current = idx;
+    stage.style.transform = `translateX(-${idx*100}vw)`;
+    pages.forEach((p,i)=> p.classList.toggle("active", i===idx));
+    dockItems.forEach((d,i)=> d.classList.toggle("active", i===idx));
+    if(idx===0) renderDashboard();
+    if(idx===1) renderInventory();
+    if(idx===2) renderSales();
+    if(idx===3) renderExpenses();
+    if(idx===4) renderReports();
+    if(idx===5) renderDebts();
+    if(idx===6) renderOrders();
+    if(idx===7) renderSettings();
+    updateDockBadge();
+  }
+  dockItems.forEach(item=>{
+    item.addEventListener("click", ()=> goto(parseInt(item.dataset.goto,10)));
+  });
+
+  // liquid glass cursor-follow highlight
+  document.querySelectorAll(".lg-btn").forEach(btn=>{
+    btn.addEventListener("mousemove", e=>{
+      const r = btn.getBoundingClientRect();
+      btn.style.setProperty("--mx", ((e.clientX-r.left)/r.width*100)+"%");
+      btn.style.setProperty("--my", ((e.clientY-r.top)/r.height*100)+"%");
+    });
+  });
+
+  // keyboard left/right nav
+  window.addEventListener("keydown", e=>{
+    if(e.key==="ArrowRight" && current<PAGE_COUNT-1) goto(current+1);
+    if(e.key==="ArrowLeft" && current>0) goto(current-1);
+  });
+
+  /* ---------------- Derived calculations ---------------- */
+  function stockValue(){
+    return data.inventory.reduce((s,i)=> s + i.cost*i.qty, 0);
+  }
+  function totalRevenue(){
+    return data.sales.reduce((s,sl)=> s + sl.total, 0);
+  }
+  function totalCOGS(){
+    return data.sales.reduce((s,sl)=> s + sl.cost*sl.qty, 0);
+  }
+  function grossProfit(){ return totalRevenue() - totalCOGS(); }
+  function totalExpenses(){ return data.expenses.reduce((s,e)=> s+e.amount, 0); }
+  function netProfit(){ return grossProfit() - totalExpenses(); }
+
+  function monthBuckets(n){
+    const out = [];
+    const now = new Date();
+    for(let i=n-1;i>=0;i--){
+      const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+      out.push(d.toISOString().slice(0,7));
+    }
+    return out;
+  }
+
+  function updateDockBadge(){
+    const badge = document.getElementById("dock-badge-inv");
+    if(badge){
+      const lowCount = data.inventory.filter(i=> i.qty <= (i.reorder||5)).length;
+      if(lowCount>0){ badge.style.display="flex"; badge.textContent = lowCount>9 ? "9+" : lowCount; }
+      else { badge.style.display="none"; }
+    }
+    const debtBadge = document.getElementById("dock-badge-debt");
+    if(debtBadge){
+      const owingCount = data.debts.filter(d=>debtStatus(d)!=="paid").length;
+      if(owingCount>0){ debtBadge.style.display="flex"; debtBadge.textContent = owingCount>9 ? "9+" : owingCount; }
+      else { debtBadge.style.display="none"; }
+    }
+    const orderBadge = document.getElementById("dock-badge-order");
+    if(orderBadge){
+      const openCount = data.orders.filter(o=>!o.fulfilled).length;
+      if(openCount>0){ orderBadge.style.display="flex"; orderBadge.textContent = openCount>9 ? "9+" : openCount; }
+      else { orderBadge.style.display="none"; }
+    }
+  }
+
+  /* ---------------- Debts ---------------- */
+  function debtCleared(d){ return (d.payments||[]).reduce((s,p)=>s+p.amount,0); }
+  function debtOutstanding(d){ return Math.max(0, d.amount - debtCleared(d)); }
+  function debtStatus(d){ return debtOutstanding(d) <= 0.004 ? "paid" : (debtCleared(d) > 0 ? "partial" : "owing"); }
+
+  document.getElementById("debt-form").addEventListener("submit", e=>{
+    e.preventDefault();
+    const name = document.getElementById("debt-name").value.trim();
+    const phone = document.getElementById("debt-phone").value.trim();
+    const amount = parseFloat(document.getElementById("debt-amount").value);
+    const date = document.getElementById("debt-date").value || todayISO();
+    const notes = document.getElementById("debt-notes").value.trim();
+    if(!name || isNaN(amount)) return;
+    data.debts.push({id:uid(), date, name, phone, amount, notes, payments:[], source:"manual", saleIds:[]});
+    save();
+    e.target.reset();
+    document.getElementById("debt-date").value = todayISO();
+    renderDebts();
+    toast(`Debt logged for ${name}`);
+  });
+  document.getElementById("debt-date").value = todayISO();
+  document.getElementById("debt-search").addEventListener("input", renderDebts);
+
+  function renderDebts(){
+    const statsEl = document.getElementById("debt-stats");
+    const totalOutstanding = data.debts.reduce((s,d)=>s+debtOutstanding(d),0);
+    const totalCleared = data.debts.reduce((s,d)=>s+debtCleared(d),0);
+    const owingCount = data.debts.filter(d=>debtStatus(d)!=="paid").length;
+    statsEl.innerHTML = `
+      <div class="glass stat"><div class="k">Outstanding</div><div class="v down">${fmt(totalOutstanding)}</div><div class="d">${owingCount} debtor${owingCount!==1?'s':''} not yet clear</div></div>
+      <div class="glass stat"><div class="k">Cleared to date</div><div class="v up">${fmt(totalCleared)}</div><div class="d">across ${data.debts.length} debt${data.debts.length!==1?'s':''}</div></div>
+      <div class="glass stat"><div class="k">From credit sales</div><div class="v" style="font-size:22px;">${fmt(data.debts.filter(d=>d.source==='sale').reduce((s,d)=>s+d.amount,0))}</div><div class="d">Auto-logged at checkout</div></div>
+    `;
+    const tbody = document.getElementById("debt-table");
+    const q = (document.getElementById("debt-search").value||"").trim().toLowerCase();
+    let rows = [...data.debts].reverse();
+    if(q) rows = rows.filter(d=> d.name.toLowerCase().includes(q));
+    if(!rows.length){
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">${data.debts.length? "No debts match your search.":"No debts logged — outstanding credit sales appear here automatically."}</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(d=>{
+        const cleared = debtCleared(d), outstanding = debtOutstanding(d), status = debtStatus(d);
+        const statusPill = status==="paid" ? '<span class="pill ok">Paid</span>' : (status==="partial" ? '<span class="pill mid">Partial</span>' : '<span class="pill low">Owing</span>');
+        return `<tr>
+          <td class="muted">${d.date}</td>
+          <td>${esc(d.name)}${d.source==='sale'?' <span class="muted" style="font-size:11px;">(credit sale)</span>':''}</td>
+          <td class="muted">${d.phone?esc(d.phone):'—'}</td>
+          <td class="num">${fmt(d.amount)}</td>
+          <td class="num up">${fmt(cleared)}</td>
+          <td class="num ${outstanding>0?'down':''}">${fmt(outstanding)}</td>
+          <td class="muted" style="font-size:12px;">${d.notes?esc(d.notes):'—'}${(d.payments&&d.payments.length)?` <span class="muted" style="font-size:10.5px;">(${d.payments.length} payment${d.payments.length>1?'s':''})</span>`:''}</td>
+          <td>${statusPill}</td>
+          <td class="row-actions">
+            ${status!=='paid'?`<button class="lg-btn small primary" data-pay="${d.id}">Log payment</button>`:''}
+            <button class="lg-btn small danger" data-deldebt="${d.id}">Delete</button>
+          </td>
+        </tr>`;
+      }).join("");
+    }
+    tbody.querySelectorAll("[data-pay]").forEach(b=> b.addEventListener("click", ()=>{
+      const debt = data.debts.find(d=>d.id===b.dataset.pay);
+      if(!debt) return;
+      const outstanding = debtOutstanding(debt);
+      const val = prompt(`Log a payment from ${debt.name} (outstanding: ${fmt(outstanding)}):`, "");
+      if(val===null) return;
+      const amt = parseFloat(val);
+      if(isNaN(amt) || amt<=0){ toast("Enter a valid payment amount"); return; }
+      const applied = Math.min(amt, outstanding);
+      debt.payments = debt.payments || [];
+      debt.payments.push({id:uid(), date:todayISO(), amount:applied});
+      save();
+      if(debtStatus(debt)==="paid" && debt.source==="sale" && debt.saleIds && debt.saleIds.length){
+        debt.saleIds.forEach(sid=>{
+          const s = data.sales.find(x=>x.id===sid);
+          if(s) s.paid = true;
+        });
+        save();
+        renderSales();
+      }
+      renderDebts();
+      const leftover = amt - applied;
+      toast(leftover>0.004
+        ? `Logged ${fmt(applied)} — debt fully cleared (${fmt(leftover)} was extra)`
+        : `Logged ${fmt(applied)} from ${debt.name} — ${fmt(debtOutstanding(debt))} still outstanding`);
+    }));
+    tbody.querySelectorAll("[data-deldebt]").forEach(b=> b.addEventListener("click", ()=>{
+      data.debts = data.debts.filter(d=>d.id!==b.dataset.deldebt);
+      save(); renderDebts(); toast("Debt entry removed");
+    }));
+    updateDockBadge();
+  }
+
+  /* ---------------- Items ordered (prepay) ---------------- */
+  function orderPaid(o){ return (o.payments||[]).reduce((s,p)=>s+p.amount,0); }
+  function orderBalance(o){ return Math.max(0, o.total - orderPaid(o)); }
+  function orderStatus(o){
+    if(o.fulfilled) return "fulfilled";
+    const bal = orderBalance(o);
+    if(bal <= 0.004) return "paid";
+    return orderPaid(o) > 0 ? "partial" : "pending";
+  }
+
+  document.getElementById("order-form").addEventListener("submit", e=>{
+    e.preventDefault();
+    const customer = document.getElementById("order-customer").value.trim();
+    const phone = document.getElementById("order-phone").value.trim();
+    const item = document.getElementById("order-item").value.trim();
+    const total = parseFloat(document.getElementById("order-total").value);
+    const deposit = parseFloat(document.getElementById("order-deposit").value) || 0;
+    const date = document.getElementById("order-date").value || todayISO();
+    const notes = document.getElementById("order-notes").value.trim();
+    if(!customer || !item || isNaN(total)) return;
+    if(deposit > total){ toast("Deposit can't exceed the total price"); return; }
+    const payments = deposit>0 ? [{id:uid(), date, amount:deposit}] : [];
+    data.orders.push({id:uid(), date, customer, phone, item, total, payments, notes, fulfilled:false});
+    save();
+    e.target.reset();
+    document.getElementById("order-date").value = todayISO();
+    renderOrders();
+    toast(`Order logged for ${customer}`);
+  });
+  document.getElementById("order-date").value = todayISO();
+  document.getElementById("order-search").addEventListener("input", renderOrders);
+
+  function renderOrders(){
+    const statsEl = document.getElementById("order-stats");
+    const active = data.orders.filter(o=>!o.fulfilled);
+    const totalBalance = active.reduce((s,o)=>s+orderBalance(o),0);
+    const totalHeld = data.orders.reduce((s,o)=>s+orderPaid(o),0);
+    statsEl.innerHTML = `
+      <div class="glass stat"><div class="k">Balance due (open orders)</div><div class="v down">${fmt(totalBalance)}</div><div class="d">${active.length} order${active.length!==1?'s':''} open</div></div>
+      <div class="glass stat"><div class="k">Deposits &amp; payments held</div><div class="v up">${fmt(totalHeld)}</div><div class="d">across ${data.orders.length} order${data.orders.length!==1?'s':''}</div></div>
+      <div class="glass stat"><div class="k">Fulfilled</div><div class="v" style="font-size:22px;">${data.orders.filter(o=>o.fulfilled).length}</div><div class="d">handed over to customer</div></div>
+    `;
+    const tbody = document.getElementById("order-table");
+    const q = (document.getElementById("order-search").value||"").trim().toLowerCase();
+    let rows = [...data.orders].reverse();
+    if(q) rows = rows.filter(o=> o.customer.toLowerCase().includes(q) || o.item.toLowerCase().includes(q));
+    if(!rows.length){
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">${data.orders.length? "No orders match your search.":"No orders logged yet — add a prepaid order above."}</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(o=>{
+        const paid = orderPaid(o), balance = orderBalance(o), status = orderStatus(o);
+        const pillMap = { fulfilled:'<span class="pill ok">Fulfilled</span>', paid:'<span class="pill ok">Paid in full</span>', partial:'<span class="pill mid">Deposit paid</span>', pending:'<span class="pill low">Unpaid</span>' };
+        return `<tr>
+          <td class="muted">${o.date}</td>
+          <td>${esc(o.customer)}${o.phone?` <span class="muted" style="font-size:11px;">${esc(o.phone)}</span>`:''}</td>
+          <td>${esc(o.item)}</td>
+          <td class="num">${fmt(o.total)}</td>
+          <td class="num up">${fmt(paid)}</td>
+          <td class="num ${balance>0?'down':''}">${fmt(balance)}</td>
+          <td class="muted" style="font-size:12px;">${o.notes?esc(o.notes):'—'}</td>
+          <td>${pillMap[status]}</td>
+          <td class="row-actions">
+            ${!o.fulfilled && balance>0?`<button class="lg-btn small primary" data-orderpay="${o.id}">Log payment</button>`:''}
+            ${!o.fulfilled && balance<=0.004?`<button class="lg-btn small primary" data-fulfill="${o.id}">Mark fulfilled</button>`:''}
+            <button class="lg-btn small danger" data-delorder="${o.id}">Delete</button>
+          </td>
+        </tr>`;
+      }).join("");
+    }
+    tbody.querySelectorAll("[data-orderpay]").forEach(b=> b.addEventListener("click", ()=>{
+      const order = data.orders.find(o=>o.id===b.dataset.orderpay);
+      if(!order) return;
+      const balance = orderBalance(order);
+      const val = prompt(`Log a payment from ${order.customer} (balance due: ${fmt(balance)}):`, "");
+      if(val===null) return;
+      const amt = parseFloat(val);
+      if(isNaN(amt) || amt<=0){ toast("Enter a valid payment amount"); return; }
+      const applied = Math.min(amt, balance);
+      order.payments = order.payments || [];
+      order.payments.push({id:uid(), date:todayISO(), amount:applied});
+      save();
+      renderOrders();
+      const leftover = amt - applied;
+      toast(leftover>0.004
+        ? `Logged ${fmt(applied)} — order fully paid (${fmt(leftover)} was extra)`
+        : `Logged ${fmt(applied)} — ${fmt(orderBalance(order))} still due`);
+    }));
+    tbody.querySelectorAll("[data-fulfill]").forEach(b=> b.addEventListener("click", ()=>{
+      const order = data.orders.find(o=>o.id===b.dataset.fulfill);
+      if(order){ order.fulfilled = true; save(); renderOrders(); toast(`${order.item} marked fulfilled for ${order.customer}`); }
+    }));
+    tbody.querySelectorAll("[data-delorder]").forEach(b=> b.addEventListener("click", ()=>{
+      data.orders = data.orders.filter(o=>o.id!==b.dataset.delorder);
+      save(); renderOrders(); toast("Order removed");
+    }));
+    updateDockBadge();
+  }
+
+  /* ---------------- Dashboard ---------------- */
+  function renderDashboard(){
+    const statsEl = document.getElementById("dash-stats");
+    const rev = totalRevenue(), exp = totalExpenses(), np = netProfit(), sv = stockValue();
+    const owingTotal = data.debts.reduce((s,d)=>s+debtOutstanding(d),0);
+    const owingCount = data.debts.filter(d=>debtStatus(d)!=="paid").length;
+    statsEl.innerHTML = `
+      <div class="glass stat"><div class="k">Stock value</div><div class="v">${fmt(sv)}</div><div class="d">${data.inventory.length} item types on hand</div></div>
+      <div class="glass stat"><div class="k">Total revenue</div><div class="v">${fmt(rev)}</div><div class="d">${data.sales.length} sales recorded</div></div>
+      <div class="glass stat"><div class="k">Total expenses</div><div class="v">${fmt(exp)}</div><div class="d">${data.expenses.length} entries logged</div></div>
+      <div class="glass stat"><div class="k">Net profit</div><div class="v ${np>=0?'up':'down'}">${fmt(np)}</div><div class="d">${np>=0?'▲ in the black':'▼ running at a loss'}</div></div>
+      <div class="glass stat"><div class="k">Outstanding debt</div><div class="v ${owingTotal>0?'down':''}">${fmt(owingTotal)}</div><div class="d">${owingCount} unpaid debtor(s)</div></div>
+    `;
+
+    // chart: last 6 months revenue vs expenses
+    const months = monthBuckets(6);
+    const revByMonth = {}, expByMonth = {};
+    months.forEach(m=>{ revByMonth[m]=0; expByMonth[m]=0; });
+    data.sales.forEach(s=>{ const m = monthKey(s.date); if(m in revByMonth) revByMonth[m]+=s.total; });
+    data.expenses.forEach(e=>{ const m = monthKey(e.date); if(m in expByMonth) expByMonth[m]+=e.amount; });
+    const maxVal = Math.max(1, ...months.map(m=>Math.max(revByMonth[m],expByMonth[m])));
+    const chart = document.getElementById("chart");
+    chart.innerHTML = months.map(m=>{
+      const revH = Math.max(3, revByMonth[m]/maxVal*150);
+      const expH = Math.max(3, expByMonth[m]/maxVal*150);
+      const label = new Date(m+"-01").toLocaleDateString("en-KE",{month:"short"});
+      return `<div class="bar-col">
+        <div style="display:flex; align-items:flex-end; gap:4px; height:150px; width:100%;">
+          <div class="bar" style="height:${revH}px; flex:1;" title="Revenue ${fmt(revByMonth[m])}"></div>
+          <div class="bar exp" style="height:${expH}px; flex:1;" title="Expenses ${fmt(expByMonth[m])}"></div>
+        </div>
+        <div class="bar-label">${label}</div>
+      </div>`;
+    }).join("");
+
+    const lowEl = document.getElementById("dash-lowstock");
+    const low = data.inventory.filter(i=> i.qty <= (i.reorder||5));
+    lowEl.innerHTML = low.length ? low.map(i=>`
+      <tr><td>${esc(i.name)}</td><td class="num">${i.qty}</td><td class="num">${i.reorder||5}</td>
+      <td><span class="pill ${i.qty===0?'low':'mid'}">${i.qty===0?'Out of stock':'Reorder soon'}</span></td></tr>
+    `).join("") : `<tr><td colspan="4" class="empty">All items are well stocked.</td></tr>`;
+  }
+
+  /* ---------------- Inventory ---------------- */
+  document.getElementById("inv-form").addEventListener("submit", e=>{
+    e.preventDefault();
+    const name = document.getElementById("inv-name").value.trim();
+    const cost = parseFloat(document.getElementById("inv-cost").value);
+    const price = parseFloat(document.getElementById("inv-price").value);
+    const qty = parseInt(document.getElementById("inv-qty").value,10);
+    const reorder = parseInt(document.getElementById("inv-reorder").value,10) || 5;
+    const barcode = document.getElementById("inv-barcode").value.trim();
+    const dateAdded = document.getElementById("inv-date").value || todayISO();
+    if(!name || isNaN(cost) || isNaN(price) || isNaN(qty)) return;
+    if(barcode && data.inventory.some(i=>i.barcode===barcode)){ toast("That barcode is already assigned to another item"); return; }
+    data.inventory.push({id:uid(), name, cost, price, qty, reorder, barcode: barcode||null, dateAdded});
+    save();
+    e.target.reset();
+    document.getElementById("inv-date").value = todayISO();
+    renderInventory();
+    toast(`Added "${name}" to inventory`);
+  });
+  document.getElementById("inv-date").value = todayISO();
+
+  document.getElementById("btn-inv-scan").addEventListener("click", ()=>{
+    openScanner({ mode:"capture", onResult: (value)=>{
+      document.getElementById("inv-barcode").value = value;
+      toast("Barcode captured");
+    }});
+  });
+
+  function renderInventory(){
+    const tbody = document.getElementById("inv-table");
+    const q = (document.getElementById("inv-search").value||"").trim().toLowerCase();
+    const items = q ? data.inventory.filter(i=>i.name.toLowerCase().includes(q) || (i.barcode||"").includes(q)) : data.inventory;
+    if(!items.length){
+      tbody.innerHTML = `<tr><td colspan="8" class="empty">${data.inventory.length? "No items match your search.":"No items yet — add your first item above."}</td></tr>`;
+    } else {
+      tbody.innerHTML = items.map(i=>{
+        const status = i.qty===0 ? '<span class="pill low">Out</span>' : (i.qty<=i.reorder ? '<span class="pill mid">Low</span>' : '<span class="pill ok">In stock</span>');
+        return `<tr>
+          <td>${esc(i.name)}</td>
+          <td class="num">${fmt(i.cost)}</td>
+          <td class="num">${fmt(i.price)}</td>
+          <td class="num">
+            <div class="flex gap8 aic">
+              <button class="lg-btn small" data-destock="${i.id}" style="padding:4px 10px;">−</button>
+              <span style="min-width:26px; text-align:center;">${i.qty}</span>
+              <button class="lg-btn small" data-restock="${i.id}" style="padding:4px 10px;">＋</button>
+            </div>
+          </td>
+          <td class="num">${fmt(i.cost*i.qty)}</td>
+          <td class="muted num" style="font-size:12px;">${i.barcode ? esc(i.barcode) : '—'}</td>
+          <td>${status}</td>
+          <td class="row-actions">
+            <button class="lg-btn small" data-code="${i.id}">${i.barcode?'Edit code':'Set code'}</button>
+            <button class="lg-btn small" data-bulk="${i.id}">Adjust by…</button>
+            <button class="lg-btn small danger" data-del="${i.id}">Delete</button>
+          </td>
+        </tr>`;
+      }).join("");
+    }
+    tbody.querySelectorAll("[data-del]").forEach(b=> b.addEventListener("click", ()=>{
+      data.inventory = data.inventory.filter(i=>i.id!==b.dataset.del);
+      save(); renderInventory(); toast("Item removed");
+    }));
+    tbody.querySelectorAll("[data-restock]").forEach(b=> b.addEventListener("click", ()=>{
+      const item = data.inventory.find(i=>i.id===b.dataset.restock);
+      if(item){ item.qty += 1; save(); renderInventory(); toast(`${item.name}: +1 (now ${item.qty})`); }
+    }));
+    tbody.querySelectorAll("[data-destock]").forEach(b=> b.addEventListener("click", ()=>{
+      const item = data.inventory.find(i=>i.id===b.dataset.destock);
+      if(item){ item.qty = Math.max(0, item.qty-1); save(); renderInventory(); toast(`${item.name}: −1 (now ${item.qty})`); }
+    }));
+    tbody.querySelectorAll("[data-bulk]").forEach(b=> b.addEventListener("click", ()=>{
+      const item = data.inventory.find(i=>i.id===b.dataset.bulk);
+      if(!item) return;
+      const val = prompt(`Adjust stock for "${item.name}" (currently ${item.qty}).\nEnter a number to add, or a negative number to remove:`, "");
+      if(val===null) return;
+      const delta = parseInt(val,10);
+      if(isNaN(delta)) { toast("Enter a whole number, e.g. 25 or -5"); return; }
+      item.qty = Math.max(0, item.qty + delta);
+      save(); renderInventory();
+      toast(`${item.name}: ${delta>=0?'+':''}${delta} (now ${item.qty})`);
+    }));
+    tbody.querySelectorAll("[data-code]").forEach(b=> b.addEventListener("click", ()=>{
+      const item = data.inventory.find(i=>i.id===b.dataset.code);
+      if(!item) return;
+      const val = prompt(`Scan or type the barcode for "${item.name}":`, item.barcode||"");
+      if(val===null) return;
+      const trimmed = val.trim();
+      if(trimmed && data.inventory.some(x=>x.barcode===trimmed && x.id!==item.id)){ toast("That barcode is already assigned to another item"); return; }
+      item.barcode = trimmed || null;
+      save(); renderInventory();
+      toast(trimmed ? `Barcode set for ${item.name}` : `Barcode cleared for ${item.name}`);
+    }));
+    updateDockBadge();
+  }
+
+  document.getElementById("inv-search").addEventListener("input", renderInventory);
+
+  /* ---------------- Sales: quick-tap + barcode basket ---------------- */
+  function refreshSaleItemOptions(){
+    const sel = document.getElementById("sale-item");
+    const prev = sel.value;
+    sel.innerHTML = data.inventory.filter(i=>i.qty>0).map(i=>
+      `<option value="${i.id}">${esc(i.name)} — ${i.qty} in stock</option>`
+    ).join("") || `<option value="">No stock available</option>`;
+    if(prev) sel.value = prev;
+  }
+
+  function addToCart(itemId, qty){
+    const item = data.inventory.find(i=>i.id===itemId);
+    if(!item){ toast("Item not found"); return; }
+    const inCartQty = data.cart.filter(c=>c.itemId===itemId).reduce((s,c)=>s+c.qty,0);
+    if(inCartQty + qty > item.qty){
+      toast(`Only ${item.qty} of "${item.name}" in stock`);
+      if(navigator.vibrate) navigator.vibrate(120);
+      return;
+    }
+    const line = data.cart.find(c=>c.itemId===itemId);
+    if(line) line.qty += qty;
+    else data.cart.push({itemId, qty});
+    save();
+    renderCart();
+    if(navigator.vibrate) navigator.vibrate(40);
+  }
+  function changeCartQty(itemId, delta){
+    const line = data.cart.find(c=>c.itemId===itemId);
+    if(!line) return;
+    const item = data.inventory.find(i=>i.id===itemId);
+    line.qty += delta;
+    if(line.qty <= 0){ data.cart = data.cart.filter(c=>c.itemId!==itemId); }
+    else if(item && line.qty > item.qty){ line.qty = item.qty; toast(`Only ${item.qty} in stock`); }
+    save(); renderCart();
+  }
+  function removeFromCart(itemId){
+    data.cart = data.cart.filter(c=>c.itemId!==itemId);
+    save(); renderCart();
+  }
+
+  function renderCart(){
+    const tbody = document.getElementById("cart-table");
+    if(!data.cart.length){
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">Basket is empty — scan, tap a top seller, or add an item manually.</td></tr>`;
+    } else {
+      tbody.innerHTML = data.cart.map(c=>{
+        const item = data.inventory.find(i=>i.id===c.itemId);
+        if(!item) return "";
+        return `<tr>
+          <td>${esc(item.name)}</td>
+          <td class="num">
+            <div class="flex gap8 aic">
+              <button class="lg-btn small" data-dec="${item.id}" style="padding:4px 10px;">−</button>
+              <span style="min-width:22px; text-align:center;">${c.qty}</span>
+              <button class="lg-btn small" data-inc="${item.id}" style="padding:4px 10px;">＋</button>
+            </div>
+          </td>
+          <td class="num">${fmt(item.price)}</td>
+          <td class="num">${fmt(item.price*c.qty)}</td>
+          <td><button class="lg-btn small danger" data-remove="${item.id}">Remove</button></td>
+        </tr>`;
+      }).join("");
+    }
+    tbody.querySelectorAll("[data-inc]").forEach(b=> b.addEventListener("click", ()=>changeCartQty(b.dataset.inc, 1)));
+    tbody.querySelectorAll("[data-dec]").forEach(b=> b.addEventListener("click", ()=>changeCartQty(b.dataset.dec, -1)));
+    tbody.querySelectorAll("[data-remove]").forEach(b=> b.addEventListener("click", ()=>removeFromCart(b.dataset.remove)));
+    const total = data.cart.reduce((s,c)=>{ const item = data.inventory.find(i=>i.id===c.itemId); return s + (item? item.price*c.qty : 0); },0);
+    document.getElementById("cart-total").textContent = fmt(total);
+  }
+
+  function renderQuickTiles(){
+    const wrap = document.getElementById("quick-tiles");
+    const soldCount = {};
+    data.sales.forEach(s=>{ soldCount[s.itemId] = (soldCount[s.itemId]||0) + s.qty; });
+    let top = data.inventory.filter(i=>i.qty>0)
+      .sort((a,b)=> (soldCount[b.id]||0) - (soldCount[a.id]||0) || b.qty - a.qty)
+      .slice(0,8);
+    if(!top.length){
+      wrap.innerHTML = `<div class="glass stat" style="grid-column:1/-1;"><div class="d">Add inventory to see quick-tap tiles here.</div></div>`;
+      return;
+    }
+    wrap.innerHTML = top.map(i=>`
+      <button class="lg-btn" data-tile="${i.id}" style="flex-direction:column; align-items:flex-start; text-align:left; padding:16px 18px; height:auto; gap:2px;">
+        <span style="font-size:14px; font-weight:700;">${esc(i.name)}</span>
+        <span class="num muted" style="font-size:12px; font-weight:500;">${fmt(i.price)} · ${i.qty} left</span>
+      </button>
+    `).join("");
+    wrap.querySelectorAll("[data-tile]").forEach(b=> b.addEventListener("click", ()=> addToCart(b.dataset.tile, 1)));
+  }
+
+  document.getElementById("btn-manual-add").addEventListener("click", ()=>{
+    const itemId = document.getElementById("sale-item").value;
+    const qty = parseInt(document.getElementById("sale-qty").value,10) || 1;
+    if(!itemId) { toast("No item selected"); return; }
+    addToCart(itemId, qty);
+  });
+
+  document.getElementById("sale-payment").addEventListener("change", e=>{
+    document.getElementById("sale-debtor-wrap").style.display = e.target.value==="credit" ? "flex" : "none";
+  });
+  document.getElementById("sale-date").value = todayISO();
+
+  document.getElementById("btn-complete-sale").addEventListener("click", ()=>{
+    if(!data.cart.length){ toast("Basket is empty"); return; }
+    const saleDate = document.getElementById("sale-date").value || todayISO();
+    const isCredit = document.getElementById("sale-payment").value === "credit";
+    const debtorName = document.getElementById("sale-debtor").value.trim();
+    if(isCredit && !debtorName){ toast("Enter the debtor's name for a credit sale"); return; }
+    let recorded = 0, skipped = [], saleTotal = 0, saleIds = [];
+    data.cart.forEach(c=>{
+      const item = data.inventory.find(i=>i.id===c.itemId);
+      if(!item || c.qty > item.qty){ skipped.push(item?item.name:"item"); return; }
+      item.qty -= c.qty;
+      const lineTotal = item.price*c.qty;
+      const saleId = uid();
+      data.sales.push({id:saleId, date:saleDate, itemId:item.id, name:item.name, qty:c.qty, price:item.price, cost:item.cost, total:lineTotal, paid: !isCredit});
+      saleIds.push(saleId);
+      saleTotal += lineTotal;
+      recorded++;
+    });
+    if(isCredit && saleTotal>0){
+      data.debts.push({id:uid(), date:saleDate, name:debtorName, phone:"", amount:saleTotal, notes:"From credit sale", payments:[], source:"sale", saleIds});
+    }
+    data.cart = [];
+    save();
+    document.getElementById("sale-debtor").value = "";
+    document.getElementById("sale-payment").value = "cash";
+    document.getElementById("sale-debtor-wrap").style.display = "none";
+    document.getElementById("sale-date").value = todayISO();
+    renderCart(); renderSales(); renderInventory(); renderQuickTiles(); renderDebts();
+    if(recorded) toast(`Sale complete — ${recorded} item${recorded>1?'s':''} recorded${isCredit? ' (on credit)':''}`);
+    if(skipped.length) toast(`Skipped (insufficient stock): ${skipped.join(", ")}`);
+  });
+
+  // Barcode field — works with hardware scanners (act as fast keyboard input + Enter) and manual typing
+  const barcodeInput = document.getElementById("barcode-input");
+  barcodeInput.addEventListener("keydown", e=>{
+    if(e.key !== "Enter") return;
+    e.preventDefault();
+    const code = barcodeInput.value.trim();
+    barcodeInput.value = "";
+    if(!code) return;
+    const item = data.inventory.find(i=>i.barcode===code);
+    if(!item){ toast(`No item matches barcode "${code}"`); if(navigator.vibrate) navigator.vibrate([60,40,60]); return; }
+    addToCart(item.id, 1);
+    toast(`Added ${item.name}`);
+  });
+
+  /* ---------------- Camera barcode scanning (offline, on-device) ---------------- */
+  let scanStream = null, scanning = false, lastScanAt = 0, scanOpts = {};
+  const scanModal = document.getElementById("scan-modal");
+  const scanVideo = document.getElementById("scan-video");
+  const scanStatus = document.getElementById("scan-status");
+
+  document.getElementById("btn-cam-scan").addEventListener("click", ()=> openScanner());
+  document.getElementById("btn-close-scan").addEventListener("click", closeScanner);
+
+  async function openScanner(opts){
+    scanOpts = opts || { mode:"cart" };
+    if(!("BarcodeDetector" in window)){
+      toast("Camera scanning isn't supported on this browser — use the barcode field instead.");
+      return;
+    }
+    try{
+      scanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" } });
+    }catch(err){
+      toast("Couldn't access the camera — check app permissions.");
+      return;
+    }
+    scanVideo.srcObject = scanStream;
+    scanModal.style.display = "flex";
+    scanning = true;
+    scanStatus.textContent = "Point the camera at a barcode…";
+    const detector = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code"]});
+    const loop = async ()=>{
+      if(!scanning) return;
+      try{
+        const codes = await detector.detect(scanVideo);
+        if(codes.length && Date.now()-lastScanAt > 1200){
+          lastScanAt = Date.now();
+          const value = codes[0].rawValue;
+          if(scanOpts.mode === "capture"){
+            if(navigator.vibrate) navigator.vibrate(60);
+            closeScanner();
+            if(scanOpts.onResult) scanOpts.onResult(value);
+            return;
+          }
+          const item = data.inventory.find(i=>i.barcode===value);
+          if(item){
+            addToCart(item.id, 1);
+            scanStatus.textContent = `Added ${item.name} ✓`;
+            if(navigator.vibrate) navigator.vibrate(60);
+          } else {
+            scanStatus.textContent = `No item matches "${value}"`;
+            if(navigator.vibrate) navigator.vibrate([60,40,60]);
+          }
+        }
+      }catch(err){ /* detection hiccup, keep looping */ }
+      if(scanning) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+  function closeScanner(){
+    scanning = false;
+    scanModal.style.display = "none";
+    if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream = null; }
+  }
+
+  function renderSales(){
+    refreshSaleItemOptions();
+    renderQuickTiles();
+    renderCart();
+    const tbody = document.getElementById("sales-table");
+    const q = (document.getElementById("sales-search").value||"").trim().toLowerCase();
+    let rows = [...data.sales].reverse();
+    if(q) rows = rows.filter(s=> s.name.toLowerCase().includes(q) || s.date.includes(q));
+    rows = rows.slice(0,60);
+    if(!rows.length){
+      tbody.innerHTML = `<tr><td colspan="8" class="empty">${data.sales.length? "No sales match your search.":"No sales recorded yet."}</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(s=>{
+        const profit = (s.price-s.cost)*s.qty;
+        const paymentPill = s.paid===false ? '<span class="pill low">Credit</span>' : '<span class="pill ok">Cash</span>';
+        return `<tr>
+          <td class="muted">${s.date}</td>
+          <td>${esc(s.name)}</td>
+          <td class="num">${s.qty}</td>
+          <td class="num">${fmt(s.price)}</td>
+          <td class="num">${fmt(s.total)}</td>
+          <td class="num ${profit>=0?'up':'down'}">${fmt(profit)}</td>
+          <td>${paymentPill}</td>
+          <td><button class="lg-btn small danger" data-undo="${s.id}">Undo</button></td>
+        </tr>`;
+      }).join("");
+    }
+    tbody.querySelectorAll("[data-undo]").forEach(b=> b.addEventListener("click", ()=>{
+      const s = data.sales.find(x=>x.id===b.dataset.undo);
+      if(!s) return;
+      const item = data.inventory.find(i=>i.id===s.itemId);
+      if(item) item.qty += s.qty;
+      data.sales = data.sales.filter(x=>x.id!==s.id);
+      const linkedDebt = data.debts.find(d=> d.saleIds && d.saleIds.includes(s.id));
+      if(linkedDebt){
+        linkedDebt.amount = Math.max(0, linkedDebt.amount - s.total);
+        linkedDebt.saleIds = linkedDebt.saleIds.filter(id=>id!==s.id);
+        if(linkedDebt.amount <= 0.004){ data.debts = data.debts.filter(d=>d.id!==linkedDebt.id); }
+      }
+      save(); renderSales(); renderInventory(); renderDebts(); toast("Sale undone, stock restored");
+    }));
+  }
+  document.getElementById("sales-search").addEventListener("input", renderSales);
+
+  /* ---------------- Expenses ---------------- */
+  document.getElementById("exp-form").addEventListener("submit", e=>{
+    e.preventDefault();
+    const category = document.getElementById("exp-category").value;
+    const desc = document.getElementById("exp-desc").value.trim();
+    const amount = parseFloat(document.getElementById("exp-amount").value);
+    const recurring = document.getElementById("exp-recurring").value === "yes";
+    const date = document.getElementById("exp-date").value || todayISO();
+    if(isNaN(amount)) return;
+    data.expenses.push({id:uid(), date, category, desc, amount, recurring});
+    save();
+    e.target.reset();
+    document.getElementById("exp-date").value = todayISO();
+    renderExpenses();
+    toast(`Expense added: ${category} — ${fmt(amount)}`);
+  });
+  document.getElementById("exp-date").value = todayISO();
+
+  function renderExpenses(){
+    const tbody = document.getElementById("exp-table");
+    const q = (document.getElementById("exp-search").value||"").trim().toLowerCase();
+    let rows = [...data.expenses].reverse();
+    if(q) rows = rows.filter(x=> x.category.toLowerCase().includes(q) || (x.desc||"").toLowerCase().includes(q));
+    if(!rows.length){
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">${data.expenses.length? "No expenses match your search.":"No expenses logged yet."}</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(x=>`
+        <tr>
+          <td class="muted">${x.date}</td>
+          <td>${esc(x.category)}</td>
+          <td class="muted">${esc(x.desc||"—")}</td>
+          <td class="num">${fmt(x.amount)}</td>
+          <td>${x.recurring? '<span class="pill mid">Monthly</span>' : '<span class="muted">One-off</span>'}</td>
+          <td><button class="lg-btn small danger" data-delexp="${x.id}">Delete</button></td>
+        </tr>
+      `).join("");
+    }
+    tbody.querySelectorAll("[data-delexp]").forEach(b=> b.addEventListener("click", ()=>{
+      data.expenses = data.expenses.filter(x=>x.id!==b.dataset.delexp);
+      save(); renderExpenses(); toast("Expense removed");
+    }));
+  }
+  document.getElementById("exp-search").addEventListener("input", renderExpenses);
+
+  /* ---------------- Reports ---------------- */
+  function renderReports(){
+    const rev = totalRevenue(), cogs = totalCOGS(), gp = grossProfit(), exp = totalExpenses(), np = netProfit();
+    const rowsHtml = [
+      ["Revenue (sales)", rev, false],
+      ["Cost of goods sold", -cogs, false],
+      ["Gross profit", gp, true],
+      ["Operating expenses", -exp, false],
+      ["Net profit", np, true],
+    ];
+    document.getElementById("pnl-table").innerHTML = rowsHtml.map(([label,val,bold])=>`
+      <tr style="${bold?'border-top:1px solid rgba(255,255,255,0.14);':''}">
+        <td style="padding:10px 6px; ${bold?'font-weight:700;':''}">${label}</td>
+        <td class="num" style="padding:10px 6px; text-align:right; ${bold?'font-weight:700;':''} ${val<0?'color:var(--rose)':(bold?'color:var(--emerald)':'')}">${val<0?'−':''}${fmt(Math.abs(val))}</td>
+      </tr>
+    `).join("");
+
+    const byCat = {};
+    data.expenses.forEach(e=>{ byCat[e.category] = (byCat[e.category]||0) + e.amount; });
+    const cats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+    const total = exp || 1;
+    document.getElementById("exp-breakdown").innerHTML = cats.length ? cats.map(([cat,val])=>`
+      <div class="glass stat">
+        <div class="k">${esc(cat)}</div>
+        <div class="v" style="font-size:22px;">${fmt(val)}</div>
+        <div class="d">${(val/total*100).toFixed(1)}% of overheads</div>
+      </div>
+    `).join("") : `<div class="glass stat"><div class="d">No expenses logged yet.</div></div>`;
+  }
+
+  /* ---------------- Settings ---------------- */
+  function applyTheme(theme){
+    document.documentElement.setAttribute("data-theme", theme==="light" ? "light" : "dark");
+  }
+  function renderSettings(){
+    document.getElementById("biz-name").value = data.bizName || "";
+    const hasPin = !!(data.security && data.security.pinHash);
+    document.getElementById("pin-status-text").textContent = hasPin
+      ? "PIN lock is on — the app asks for it each time it's opened."
+      : "No PIN set — anyone opening the app has access.";
+    document.getElementById("btn-remove-pin").style.display = hasPin ? "inline-flex" : "none";
+    document.getElementById("pin-current-wrap").style.display = hasPin ? "flex" : "none";
+    document.getElementById("pin-error").textContent = "";
+    updateLockButtonVisibility();
+  }
+  document.getElementById("btn-theme-dark").addEventListener("click", ()=>{
+    data.theme = "dark"; save(); applyTheme("dark"); toast("Dark theme applied");
+  });
+  document.getElementById("btn-theme-light").addEventListener("click", ()=>{
+    data.theme = "light"; save(); applyTheme("light"); toast("Light theme applied");
+  });
+  document.getElementById("btn-theme-reset").addEventListener("click", ()=>{
+    data.theme = "dark"; save(); applyTheme("dark"); toast("Theme reset to default (dark)");
+  });
+  document.getElementById("btn-save-name").addEventListener("click", ()=>{
+    data.bizName = document.getElementById("biz-name").value.trim();
+    save();
+    toast("Business name saved");
+  });
+
+  /* ---------------- App lock (offline PIN) ---------------- */
+  function simpleHash(str){
+    let h = 5381;
+    for(let i=0;i<str.length;i++){ h = ((h<<5)+h) + str.charCodeAt(i); h |= 0; }
+    return (h>>>0).toString(36);
+  }
+  document.getElementById("btn-set-pin").addEventListener("click", ()=>{
+    const pinErr = document.getElementById("pin-error");
+    const hasPin = !!(data.security && data.security.pinHash);
+    const currentVal = document.getElementById("pin-current").value;
+    const newVal = document.getElementById("pin-new").value;
+    if(hasPin){
+      if(!currentVal){ pinErr.textContent = "Enter your current PIN to change it"; return; }
+      if(simpleHash(currentVal) !== data.security.pinHash){ pinErr.textContent = "Current PIN is incorrect"; return; }
+    }
+    if(newVal.length < 4){ pinErr.textContent = "New PIN needs at least 4 digits"; return; }
+    data.security.pinHash = simpleHash(newVal);
+    save();
+    document.getElementById("pin-current").value = "";
+    document.getElementById("pin-new").value = "";
+    renderSettings();
+    toast(hasPin ? "PIN changed" : "PIN set — you'll be asked for it next time the app opens");
+  });
+  document.getElementById("btn-remove-pin").addEventListener("click", ()=>{
+    const pinErr = document.getElementById("pin-error");
+    const currentVal = document.getElementById("pin-current").value;
+    if(!currentVal){ pinErr.textContent = "Enter your current PIN to remove it"; return; }
+    if(simpleHash(currentVal) !== data.security.pinHash){ pinErr.textContent = "Current PIN is incorrect"; return; }
+    data.security.pinHash = null;
+    save();
+    document.getElementById("pin-current").value = "";
+    renderSettings();
+    toast("PIN removed — app lock is off");
+  });
+
+  function showWelcomeBanner(){
+    const banner = document.getElementById("welcome-banner");
+    document.getElementById("welcome-sub").textContent = data.bizName ? data.bizName : "Everything's right where you left it.";
+    banner.style.display = "block";
+    requestAnimationFrame(()=>{ banner.style.transform = "translateX(-50%) translateY(0)"; });
+    setTimeout(()=>{
+      banner.style.transform = "translateX(-50%) translateY(-140%)";
+      setTimeout(()=>{ banner.style.display = "none"; }, 500);
+    }, 5000);
+  }
+
+  const lockScreen = document.getElementById("lock-screen");
+  const lockInput = document.getElementById("lock-pin-input");
+  const lockError = document.getElementById("lock-error");
+
+  function showLockScreen(){
+    document.getElementById("lock-biz-name").textContent = data.bizName || "Ledger";
+    lockError.textContent = "";
+    lockInput.value = "";
+    lockScreen.style.display = "flex";
+    setTimeout(()=> lockInput.focus(), 200);
+  }
+  function attemptUnlock(){
+    const val = lockInput.value;
+    if(simpleHash(val) === (data.security && data.security.pinHash)){
+      lockScreen.style.display = "none";
+      showWelcomeBanner();
+    } else {
+      lockError.textContent = "Incorrect PIN — try again";
+      lockInput.value = "";
+      lockInput.focus();
+    }
+  }
+  document.getElementById("btn-unlock").addEventListener("click", attemptUnlock);
+  lockInput.addEventListener("keydown", e=>{ if(e.key==="Enter") attemptUnlock(); });
+
+  function initLockScreen(){
+    const hasPin = !!(data.security && data.security.pinHash);
+    if(!hasPin) return;
+    showLockScreen();
+  }
+
+  function updateLockButtonVisibility(){
+    const btn = document.getElementById("btn-lock-now");
+    if(!btn) return;
+    btn.style.display = (data.security && data.security.pinHash) ? "inline-flex" : "none";
+  }
+  document.getElementById("btn-lock-now").addEventListener("click", ()=>{
+    showLockScreen();
+    toast("Ledger locked");
+  });
+
+  document.getElementById("btn-export").addEventListener("click", ()=>{
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ledger-backup-${todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Backup exported");
+  });
+  document.getElementById("file-import").addEventListener("change", e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const parsed = JSON.parse(reader.result);
+        if(!parsed.inventory || !parsed.sales || !parsed.expenses) throw new Error("bad format");
+        if(!parsed.cart) parsed.cart = []; if(!parsed.debts) parsed.debts = []; if(!parsed.security) parsed.security = { pinHash:null }; if(!parsed.orders) parsed.orders = []; parsed.debts.forEach(d=>{ if(!d.payments) d.payments = (d.status==="paid" ? [{id:"legacy",date:d.date,amount:d.amount}] : []); });
+        data = parsed;
+        save();
+        goto(0);
+        toast("Backup imported successfully");
+      }catch(err){
+        toast("Import failed — invalid backup file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+  document.getElementById("btn-reset").addEventListener("click", ()=>{
+    if(!confirm("This will permanently erase all inventory, sales and expense data on this device. Continue?")) return;
+    data = { inventory:[], sales:[], expenses:[], cart:[], debts:[], orders:[], bizName:data.bizName, theme:data.theme, security:data.security };
+    save();
+    goto(0);
+    toast("All data reset");
+  });
+
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  /* ---------------- Seed demo data on first run ---------------- */
+  if(!data.inventory.length && !data.sales.length && !data.expenses.length && !localStorage.getItem(STORE_KEY+"_seeded")){
+    data.inventory = [
+      {id:uid(), name:"Rice 2kg", cost:180, price:230, qty:42, reorder:10},
+      {id:uid(), name:"Cooking Oil 1L", cost:250, price:300, qty:6, reorder:8},
+      {id:uid(), name:"Sugar 1kg", cost:120, price:150, qty:0, reorder:15},
+      {id:uid(), name:"Maize Flour 2kg", cost:140, price:175, qty:30, reorder:12},
+    ];
+    const daysAgo = n => { const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
+    data.sales = [
+      {id:uid(), date:daysAgo(2), itemId:data.inventory[0].id, name:"Rice 2kg", qty:5, price:230, cost:180, total:1150},
+      {id:uid(), date:daysAgo(5), itemId:data.inventory[1].id, name:"Cooking Oil 1L", qty:3, price:300, cost:250, total:900},
+      {id:uid(), date:daysAgo(20), itemId:data.inventory[3].id, name:"Maize Flour 2kg", qty:8, price:175, cost:140, total:1400},
+    ];
+    data.expenses = [
+      {id:uid(), date:daysAgo(3), category:"Rent", desc:"Shop rent", amount:15000, recurring:true},
+      {id:uid(), date:daysAgo(3), category:"Salaries", desc:"Staff wages", amount:22000, recurring:true},
+      {id:uid(), date:daysAgo(4), category:"Electricity", desc:"KPLC bill", amount:2400, recurring:true},
+      {id:uid(), date:daysAgo(4), category:"Water", desc:"Water bill", amount:900, recurring:true},
+    ];
+    save();
+    localStorage.setItem(STORE_KEY+"_seeded","1");
+  }
+
+  document.getElementById("btn-export-xlsx").addEventListener("click", exportStatementXLSX);
+  document.getElementById("btn-print-pdf").addEventListener("click", printStatementPDF);
+
+  const NAVY = "FF1F2A44";
+  const NAVY_TEXT = "FFFFFFFF";
+  const ROW_ALT = "FFEFF2F7";
+  const THIN_BORDER = { style:"thin", color:{argb:"FFB8C0CC"} };
+  const ALL_BORDERS = { top:THIN_BORDER, left:THIN_BORDER, bottom:THIN_BORDER, right:THIN_BORDER };
+
+  function styleHeaderRow(row){
+    row.eachCell(cell=>{
+      cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:NAVY} };
+      cell.font = { bold:true, color:{argb:NAVY_TEXT}, size:11 };
+      cell.alignment = { vertical:"middle", horizontal:"center" };
+      cell.border = ALL_BORDERS;
+    });
+    row.height = 20;
+  }
+  function styleDataRow(row, rowIndex){
+    row.eachCell(cell=>{
+      cell.border = ALL_BORDERS;
+      cell.alignment = { vertical:"middle" };
+      if(rowIndex % 2 === 0) cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:ROW_ALT} };
+    });
+  }
+  function addTitleBlock(ws, title, span){
+    const r1 = ws.addRow([title]);
+    ws.mergeCells(r1.number, 1, r1.number, span);
+    r1.getCell(1).font = { bold:true, size:14, color:{argb:NAVY.replace("FF","FF")} };
+    r1.getCell(1).alignment = { horizontal:"center" };
+    const r2 = ws.addRow([`Generated ${new Date().toLocaleString("en-KE")}`]);
+    ws.mergeCells(r2.number, 1, r2.number, span);
+    r2.getCell(1).font = { italic:true, size:9, color:{argb:"FF6B7684"} };
+    r2.getCell(1).alignment = { horizontal:"center" };
+    ws.addRow([]);
+  }
+
+  async function exportStatementXLSX(){
+    if(typeof ExcelJS === "undefined"){ toast("Export library not loaded — check vendor/exceljs.min.js is present"); return; }
+    const wb = new ExcelJS.Workbook();
+    wb.creator = data.bizName || "Ledger";
+    wb.created = new Date();
+    const bizName = data.bizName || "Business statement";
+    const rev = totalRevenue(), cogs = totalCOGS(), gp = grossProfit(), exp = totalExpenses(), np = netProfit();
+    const owing = data.debts.reduce((s,d)=>s+debtOutstanding(d),0);
+
+    // --- Summary sheet ---
+    const wsSummary = wb.addWorksheet("Summary");
+    wsSummary.columns = [{width:30},{width:20}];
+    addTitleBlock(wsSummary, bizName + " — Financial Summary", 2);
+    const summaryHeader = wsSummary.addRow(["Metric","Amount (KES)"]);
+    styleHeaderRow(summaryHeader);
+    const summaryRows = [
+      ["Stock value on hand", round2(stockValue())],
+      ["Revenue (sales)", round2(rev)],
+      ["Cost of goods sold", round2(-cogs)],
+      ["Gross profit", round2(gp)],
+      ["Operating expenses", round2(-exp)],
+      ["Net profit", round2(np)],
+      ["Outstanding debt (receivable)", round2(owing)],
+    ];
+    summaryRows.forEach((r,i)=>{
+      const row = wsSummary.addRow(r);
+      row.getCell(2).numFmt = '#,##0.00';
+      styleDataRow(row, i);
+      if(r[0]==="Net profit"){ row.font = { bold:true }; row.getCell(2).font = { bold:true, color:{argb: np>=0? "FF1A8F66":"FFC8433C"} }; }
+    });
+
+    // --- Inventory sheet ---
+    const wsInv = wb.addWorksheet("Inventory");
+    wsInv.columns = [{width:24},{width:12},{width:12},{width:10},{width:14},{width:12},{width:16},{width:12}];
+    addTitleBlock(wsInv, bizName + " — Inventory", 8);
+    styleHeaderRow(wsInv.addRow(["Item","Cost price","Sell price","Qty","Stock value","Reorder lvl","Barcode","Status"]));
+    data.inventory.forEach((i,idx)=>{
+      const status = i.qty===0 ? "Out of stock" : (i.qty<=(i.reorder||5) ? "Low stock" : "In stock");
+      const row = wsInv.addRow([i.name, round2(i.cost), round2(i.price), i.qty, round2(i.cost*i.qty), i.reorder||5, i.barcode||"—", status]);
+      row.getCell(2).numFmt = '#,##0.00'; row.getCell(3).numFmt = '#,##0.00'; row.getCell(5).numFmt = '#,##0.00';
+      styleDataRow(row, idx);
+    });
+
+    // --- Sales sheet ---
+    const wsSales = wb.addWorksheet("Sales");
+    wsSales.columns = [{width:12},{width:22},{width:8},{width:12},{width:12},{width:12},{width:12},{width:10}];
+    addTitleBlock(wsSales, bizName + " — Sales log", 8);
+    styleHeaderRow(wsSales.addRow(["Date","Item","Qty","Unit price","Total","Cost basis","Profit","Paid?"]));
+    data.sales.forEach((s,idx)=>{
+      const row = wsSales.addRow([s.date, s.name, s.qty, round2(s.price), round2(s.total), round2(s.cost), round2((s.price-s.cost)*s.qty), s.paid===false ? "On credit":"Yes"]);
+      [4,5,6,7].forEach(c=> row.getCell(c).numFmt = '#,##0.00');
+      styleDataRow(row, idx);
+    });
+
+    // --- Expenses sheet ---
+    const wsExp = wb.addWorksheet("Expenses");
+    wsExp.columns = [{width:12},{width:16},{width:26},{width:12},{width:16}];
+    addTitleBlock(wsExp, bizName + " — Expenses", 5);
+    styleHeaderRow(wsExp.addRow(["Date","Category","Description","Amount","Recurring monthly"]));
+    data.expenses.forEach((x,idx)=>{
+      const row = wsExp.addRow([x.date, x.category, x.desc||"", round2(x.amount), x.recurring?"Yes":"No"]);
+      row.getCell(4).numFmt = '#,##0.00';
+      styleDataRow(row, idx);
+    });
+
+    // --- Debts sheet ---
+    const wsDebt = wb.addWorksheet("Debts");
+    wsDebt.columns = [{width:12},{width:20},{width:14},{width:12},{width:14},{width:14},{width:24},{width:10}];
+    addTitleBlock(wsDebt, bizName + " — Debts", 8);
+    styleHeaderRow(wsDebt.addRow(["Date","Debtor","Phone","Original","Cleared","Outstanding","Notes","Status"]));
+    data.debts.forEach((d,idx)=>{
+      const cleared = debtCleared(d), outstanding = debtOutstanding(d), status = debtStatus(d);
+      const row = wsDebt.addRow([d.date, d.name, d.phone||"—", round2(d.amount), round2(cleared), round2(outstanding), d.notes||"—", status==="paid"?"Paid":(status==="partial"?"Partial":"Owing")]);
+      [4,5,6].forEach(c=> row.getCell(c).numFmt = '#,##0.00');
+      styleDataRow(row, idx);
+    });
+
+    // --- Orders sheet ---
+    const wsOrder = wb.addWorksheet("Orders");
+    wsOrder.columns = [{width:12},{width:20},{width:22},{width:12},{width:12},{width:12},{width:24},{width:12}];
+    addTitleBlock(wsOrder, bizName + " — Items ordered", 8);
+    styleHeaderRow(wsOrder.addRow(["Date","Customer","Item","Total","Paid","Balance","Notes","Status"]));
+    data.orders.forEach((o,idx)=>{
+      const paid = orderPaid(o), balance = orderBalance(o), status = orderStatus(o);
+      const statusLabel = {fulfilled:"Fulfilled", paid:"Paid in full", partial:"Deposit paid", pending:"Unpaid"}[status];
+      const row = wsOrder.addRow([o.date, o.customer, o.item, round2(o.total), round2(paid), round2(balance), o.notes||"—", statusLabel]);
+      [4,5,6].forEach(c=> row.getCell(c).numFmt = '#,##0.00');
+      styleDataRow(row, idx);
+    });
+
+    // --- Expense breakdown ---
+    const byCat = {};
+    data.expenses.forEach(e=>{ byCat[e.category] = (byCat[e.category]||0) + e.amount; });
+    const wsCat = wb.addWorksheet("Expense breakdown");
+    wsCat.columns = [{width:18},{width:14},{width:16}];
+    addTitleBlock(wsCat, bizName + " — Expense breakdown", 3);
+    styleHeaderRow(wsCat.addRow(["Category","Total (KES)","% of overheads"]));
+    Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([cat,val],idx)=>{
+      const row = wsCat.addRow([cat, round2(val), exp ? ((val/exp*100).toFixed(1)+"%") : "0%"]);
+      row.getCell(2).numFmt = '#,##0.00';
+      styleDataRow(row, idx);
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ledger-statement-${todayISO()}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Statement downloaded");
+  }
+  function round2(n){ return Math.round((Number(n)||0)*100)/100; }
+
+  /* ---------------- Printable statement (letterhead-style, PDF via browser print) ---------------- */
+  function printStatementPDF(){
+    const bizName = data.bizName || "Business";
+    const rev = totalRevenue(), cogs = totalCOGS(), gp = grossProfit(), exp = totalExpenses(), np = netProfit();
+    const owing = data.debts.reduce((s,d)=>s+debtOutstanding(d),0);
+    const now = new Date();
+
+    const summaryRows = [
+      ["Stock value on hand", fmt(stockValue())],
+      ["Revenue (sales)", fmt(rev)],
+      ["Cost of goods sold", "−" + fmt(cogs)],
+      ["Gross profit", fmt(gp)],
+      ["Operating expenses", "−" + fmt(exp)],
+      ["Net profit", fmt(np)],
+      ["Outstanding debt (receivable)", fmt(owing)],
+    ].map(([k,v],i)=>`<tr class="${i%2?'alt':''}"><td>${esc(k)}</td><td class="r">${v}</td></tr>`).join("");
+
+    const invRows = data.inventory.map((i,idx)=>{
+      const status = i.qty===0 ? "Out of stock" : (i.qty<=(i.reorder||5) ? "Low stock" : "In stock");
+      return `<tr class="${idx%2?'alt':''}"><td>${esc(i.name)}</td><td class="r">${fmt(i.cost)}</td><td class="r">${fmt(i.price)}</td><td class="r">${i.qty}</td><td class="r">${fmt(i.cost*i.qty)}</td><td>${status}</td></tr>`;
+    }).join("") || `<tr><td colspan="6" class="empty">No inventory recorded</td></tr>`;
+
+    const salesRows = data.sales.slice(-40).map((s,idx)=>
+      `<tr class="${idx%2?'alt':''}"><td>${s.date}</td><td>${esc(s.name)}</td><td class="r">${s.qty}</td><td class="r">${fmt(s.total)}</td><td class="r">${fmt((s.price-s.cost)*s.qty)}</td><td>${s.paid===false?'On credit':'Paid'}</td></tr>`
+    ).join("") || `<tr><td colspan="6" class="empty">No sales recorded</td></tr>`;
+
+    const expRows = data.expenses.map((x,idx)=>
+      `<tr class="${idx%2?'alt':''}"><td>${x.date}</td><td>${esc(x.category)}</td><td>${esc(x.desc||"—")}</td><td class="r">${fmt(x.amount)}</td></tr>`
+    ).join("") || `<tr><td colspan="4" class="empty">No expenses recorded</td></tr>`;
+
+    const debtRows = data.debts.map((d,idx)=>{
+      const cleared = debtCleared(d), outstanding = debtOutstanding(d), status = debtStatus(d);
+      const statusLabel = status==="paid"?"Paid":(status==="partial"?"Partial":"Owing");
+      return `<tr class="${idx%2?'alt':''}"><td>${d.date}</td><td>${esc(d.name)}</td><td class="r">${fmt(d.amount)}</td><td class="r">${fmt(cleared)}</td><td class="r">${fmt(outstanding)}</td><td>${statusLabel}</td></tr>`;
+    }).join("") || `<tr><td colspan="6" class="empty">No debts recorded</td></tr>`;
+
+    const orderRows = data.orders.map((o,idx)=>{
+      const paid = orderPaid(o), balance = orderBalance(o), status = orderStatus(o);
+      const statusLabel = {fulfilled:"Fulfilled", paid:"Paid in full", partial:"Deposit paid", pending:"Unpaid"}[status];
+      return `<tr class="${idx%2?'alt':''}"><td>${o.date}</td><td>${esc(o.customer)}</td><td>${esc(o.item)}</td><td class="r">${fmt(o.total)}</td><td class="r">${fmt(paid)}</td><td class="r">${fmt(balance)}</td><td>${statusLabel}</td></tr>`;
+    }).join("") || `<tr><td colspan="7" class="empty">No orders recorded</td></tr>`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(bizName)} — Statement</title>
+    <style>
+      *{box-sizing:border-box;}
+      body{ font-family:Georgia, 'Times New Roman', serif; color:#1a1a1a; margin:32px 40px; }
+      h1{ text-align:center; font-size:20px; margin:0 0 2px; letter-spacing:0.03em; }
+      h2.sub{ text-align:center; font-size:13px; font-weight:normal; margin:0 0 4px; color:#333; }
+      .meta{ text-align:center; font-size:11px; color:#555; margin-bottom:18px; }
+      hr{ border:none; border-top:2px solid #1F2A44; margin:10px 0 20px; }
+      h3.section{ font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:#1F2A44; border-bottom:1px solid #1F2A44; padding-bottom:4px; margin:26px 0 8px; }
+      table{ width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:6px; }
+      th{ background:#1F2A44; color:#fff; text-align:left; padding:6px 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:0.03em; }
+      td{ padding:5px 8px; border-bottom:1px solid #dfe3e8; }
+      tr.alt{ background:#eff2f7; }
+      td.r, th.r{ text-align:right; }
+      td.empty{ text-align:center; color:#888; padding:14px; }
+      .footer{ margin-top:30px; text-align:center; font-size:9.5px; color:#777; border-top:1px solid #ccc; padding-top:8px; }
+      @media print{ body{ margin:14mm 16mm; } h3.section{ break-after:avoid; } table{ break-inside:auto; } tr{ break-inside:avoid; } }
+    </style></head><body>
+      <h1>${esc(bizName.toUpperCase())}</h1>
+      <h2 class="sub">BUSINESS STATEMENT</h2>
+      <div class="meta">Generated: ${now.toLocaleDateString("en-KE")}, ${now.toLocaleTimeString("en-KE")}</div>
+      <hr>
+
+      <h3 class="section">Financial summary</h3>
+      <table><tbody>${summaryRows}</tbody></table>
+
+      <h3 class="section">Inventory (${data.inventory.length} items)</h3>
+      <table><thead><tr><th>Item</th><th class="r">Cost</th><th class="r">Price</th><th class="r">Qty</th><th class="r">Stock value</th><th>Status</th></tr></thead><tbody>${invRows}</tbody></table>
+
+      <h3 class="section">Recent sales (last 40)</h3>
+      <table><thead><tr><th>Date</th><th>Item</th><th class="r">Qty</th><th class="r">Total</th><th class="r">Profit</th><th>Payment</th></tr></thead><tbody>${salesRows}</tbody></table>
+
+      <h3 class="section">Expenses</h3>
+      <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="r">Amount</th></tr></thead><tbody>${expRows}</tbody></table>
+
+      <h3 class="section">Debts</h3>
+      <table><thead><tr><th>Date</th><th>Debtor</th><th class="r">Original</th><th class="r">Cleared</th><th class="r">Outstanding</th><th>Status</th></tr></thead><tbody>${debtRows}</tbody></table>
+
+      <h3 class="section">Items ordered</h3>
+      <table><thead><tr><th>Date</th><th>Customer</th><th>Item</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead><tbody>${orderRows}</tbody></table>
+
+      <div class="footer">Ledger — Confidential business statement | Generated offline on device</div>
+      <script>window.onload = () => { window.print(); };<\/script>
+    </body></html>`;
+
+    const win = window.open("", "_blank");
+    if(!win){ toast("Pop-up blocked — allow pop-ups to print the statement."); return; }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  }
+
+  /* ---------------- init ---------------- */
+  applyTheme(data.theme || "dark");
+  renderDashboard();
+  renderInventory();
+  renderSales();
+  renderExpenses();
+  renderReports();
+  renderDebts();
+  renderOrders();
+  renderSettings();
+  updateDockBadge();
+  initLockScreen();
+
+  /* ---------------- PWA: service worker + install prompt ---------------- */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW registration failed", err));
+    });
+  }
+  let deferredPrompt = null;
+  const installBtn = document.getElementById("btn-install");
+  const installHelpModal = document.getElementById("install-help-modal");
+
+  function isIOSDevice(){
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function isMacSafari(){
+    const ua = navigator.userAgent;
+    const isSafariEngine = /^((?!chrome|crios|fxios|edg|opr).)*safari/i.test(ua) && /apple computer/i.test(navigator.vendor || "");
+    return isSafariEngine && /macintosh/i.test(ua) && !isIOSDevice();
+  }
+  function isIOSSafari(){
+    const ua = navigator.userAgent;
+    return isIOSDevice() && /^((?!crios|fxios|edgios).)*safari/i.test(ua);
+  }
+  function isStandalone(){
+    return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  }
+
+  function openInstallHelp(){
+    const title = document.getElementById("install-help-title");
+    const sub = document.getElementById("install-help-sub");
+    const steps = document.getElementById("install-help-steps");
+    if(isIOSSafari()){
+      title.textContent = "Add Ledger to your Home Screen";
+      sub.textContent = "iOS Safari doesn't let apps trigger install directly — two taps does it.";
+      steps.innerHTML = `
+        <li><span class="icon">⬆︎</span> Tap the <strong>Share</strong> icon in Safari's toolbar (the square with an arrow pointing up).</li>
+        <li><span class="icon">＋</span> Scroll down the share sheet and tap <strong>"Add to Home Screen"</strong>.</li>
+        <li><span class="icon">✓</span> Tap <strong>"Add"</strong> in the top right. Ledger now opens like a normal app, fully offline.</li>
+      `;
+    } else if(isMacSafari()){
+      title.textContent = "Add Ledger to your Dock";
+      sub.textContent = "macOS Safari installs apps through the File menu or the Share icon, depending on your Safari version.";
+      steps.innerHTML = `
+        <li><span class="icon">▸</span> Click <strong>File</strong> in the menu bar, then look for <strong>"Add to Dock"</strong>.</li>
+        <li><span class="icon">⬆︎</span> If you don't see it there, click the <strong>Share</strong> icon in the address bar instead, then choose <strong>"Add to Dock"</strong>.</li>
+        <li><span class="icon">✓</span> Ledger appears in your Dock and opens as its own window, fully offline.</li>
+      `;
+    } else {
+      title.textContent = "Install Ledger";
+      sub.textContent = "Your browser doesn't support one-tap install. Try Chrome or Edge for a native install button, or use the steps below.";
+      steps.innerHTML = `
+        <li>Open the browser menu (usually ⋮ or ≡).</li>
+        <li>Look for <strong>"Install app"</strong> or <strong>"Add to Home Screen"</strong>.</li>
+        <li>Confirm — Ledger will then open offline like a normal app.</li>
+      `;
+    }
+    installHelpModal.style.display = "flex";
+  }
+  document.getElementById("btn-close-install-help").addEventListener("click", ()=>{
+    installHelpModal.style.display = "none";
+  });
+
+  if((isIOSSafari() || isMacSafari()) && !isStandalone()){
+    // Safari never fires beforeinstallprompt on iOS or macOS — show manual instructions instead.
+    installBtn.textContent = isIOSSafari() ? "⤓ Add to Home Screen" : "⤓ Add to Dock";
+    installBtn.style.display = "inline-flex";
+    installBtn.addEventListener("click", openInstallHelp);
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.textContent = "⤓ Install app";
+    installBtn.style.display = "inline-flex";
+  });
+  installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    installBtn.style.display = "none";
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  });
+  window.addEventListener("appinstalled", () => {
+    installBtn.style.display = "none";
+    toast("Ledger installed — you can now launch it offline from your home screen");
+  });
+})();
+</script>
+</body>
+</html>
